@@ -1585,116 +1585,97 @@ def setup_thresholds(x_ref, od_info=None, num_bins=11):
         - Select thresholds at quantiles: 0%, 1/(K-1)*100%, 2/(K-1)*100%, ..., 100%
         - This ensures each bin contains approximately the same number of paths
     """
-    flow_percentiles = analyze_path_flow_distribution(x_ref)
-    
-    if od_info is not None and 'path_to_od' in od_info:
-        # Identify multi-path ODs (ODs with more than 1 path)
-        path_to_od = od_info['path_to_od']
-        od_path_counts = {}
-        
-        for path_idx, od_idx in enumerate(path_to_od):
-            if od_idx not in od_path_counts:
-                od_path_counts[od_idx] = []
-            od_path_counts[od_idx].append(path_idx)
-        
-        # Get paths belonging to multi-path ODs
-        multi_path_ods = {od_idx: paths for od_idx, paths in od_path_counts.items() if len(paths) > 1}
-        multi_path_indices = [path_idx for paths in multi_path_ods.values() for path_idx in paths]
-        
-        if len(multi_path_indices) > 0:
-            # Get flows for multi-path OD paths only
-            multi_path_flows = x_ref[multi_path_indices]
-            
-            # STEP 0: Identify paths that MUST be major (max flow per OD)
-            must_be_major_indices = []
-            for od_idx, paths in multi_path_ods.items():
-                od_flows = x_ref[paths]
-                max_flow_path = paths[np.argmax(od_flows)]
-                must_be_major_indices.append(max_flow_path)
-            
-            must_be_major_set = set(must_be_major_indices)
-            can_be_minor_indices = np.array([p for p in multi_path_indices if p not in must_be_major_set])
-            
-            print("\nSTEP 0: Identify mandatory major paths")
-            print(f"  Paths that MUST be major (max flow per OD): {len(must_be_major_set)}")
-            print(f"  Paths that CAN be minor: {len(can_be_minor_indices)}")
-            
-            # STEP 1: Find maximum number of minor paths
-            # Key insight: Each OD must have ≥1 major path
-            # For an OD with N paths, we can have at most N-1 minor paths
-            # Therefore: max_minor_paths = sum(N-1) for all multi-path ODs
-            #          = total_paths - num_multi_path_ODs
-            
-            max_minor_paths = len(multi_path_indices) - len(multi_path_ods)
-            
-            max_multi_flow = np.max(multi_path_flows)
-            print("\nMulti-path OD analysis:")
-            print(f"  # Multi-path ODs: {len(multi_path_ods)}")
-            print(f"  # Paths in multi-path ODs: {len(multi_path_indices)}")
-            print(f"  Flow range: [{np.min(multi_path_flows):.2f}, {max_multi_flow:.2f}]")
-            print("\nSTEP 1: Maximum number of minor paths")
-            print("  Each OD must have ≥1 major path")
-            print("  For OD with N paths: max N-1 minor paths")
-            print(f"  Total paths in multi-ODs: {len(multi_path_indices)}")
-            print(f"  # Multi-path ODs: {len(multi_path_ods)}")
-            print(f"  Max possible minor paths = {len(multi_path_indices)} - {len(multi_path_ods)} = {max_minor_paths}")
-            
-            # STEP 2: Split max_minor_paths into K equal bins using equally-spaced indices
-            # Sort flows only from paths that CAN be minor (exclude mandatory major paths)
-            can_be_minor_flows = x_ref[can_be_minor_indices]
-            sorted_flows = np.sort(can_be_minor_flows)
-            
-            # Use equally-spaced indices only within max_minor_paths range
-            # First threshold is always 0, last is max flow, rest are equally spaced
-            indices = np.linspace(0, max_minor_paths-1, num_bins, dtype=int)
-            thresholds = sorted_flows[indices].tolist()
-            
-            # Enforce first threshold = 0 and last threshold = max flow
-            thresholds[0] = 0.0
-            
-            print(f"\nSTEP 2: Split into K={num_bins} bins using equally-spaced indices")
-            print(f"  Sorted flows from paths that CAN be minor: {len(sorted_flows)}")
-            print(f"  Indices: {indices.tolist()}")
-            print(f"  Threshold values: {[f'{t:.6f}' for t in thresholds]}")
-            
-            # Remove duplicates while preserving order
-            seen = set()
-            unique_thresholds = []
-            for t in thresholds:
-                if t not in seen:
-                    seen.add(t)
-                    unique_thresholds.append(t)
-            
-            print(f"\nFinal thresholds (after removing duplicates): {len(unique_thresholds)} values")
-            print(f"  {[f'{t:.6f}' for t in unique_thresholds]}")
+    if od_info is None or 'path_to_od' not in od_info:
+        raise Exception("\nError: od_info not provided or no 'path_to_od' mapping")
 
-            # unique_thresholds.remove(0.0)  # Remove 0 threshold to avoid all paths being major
-            
-            return unique_thresholds
-        else:
-            print("\nWarning: No multi-path ODs found")
-    else:
-        print("\nWarning: od_info not provided or no 'path_to_od' mapping")
+    # Identify multi-path ODs (ODs with more than 1 path)
+    path_to_od = od_info['path_to_od']
+    od_path_counts = {}
     
-    # Fallback: use percentiles from all paths
-    print("\nFalling back to percentile-based thresholds from all paths")
-    thresholds = [
-        0,
-        flow_percentiles[0],
-        flow_percentiles[1],
-        flow_percentiles[2],
-        flow_percentiles[3],
-        flow_percentiles[4],
-        flow_percentiles[5],
-        flow_percentiles[6],
-        flow_percentiles[7],
-        flow_percentiles[8],
-        flow_percentiles[9],
-    ]
+    for path_idx, od_idx in enumerate(path_to_od):
+        if od_idx not in od_path_counts:
+            od_path_counts[od_idx] = []
+        od_path_counts[od_idx].append(path_idx)
     
-    thresholds = sorted(list(set(thresholds)))
-    print(f"\nTesting {len(thresholds)} thresholds: {[f'{t:.2f}' for t in thresholds]}")
-    return thresholds
+    # Get paths belonging to multi-path ODs
+    multi_path_ods = {od_idx: paths for od_idx, paths in od_path_counts.items() if len(paths) > 1}
+    multi_path_indices = [path_idx for paths in multi_path_ods.values() for path_idx in paths]
+
+    if len(multi_path_ods) == 0:
+        raise Exception("\nError: No multi-path ODs found")
+    
+    # Get flows for multi-path OD paths only
+    multi_path_flows = x_ref[multi_path_indices]
+    
+    # STEP 0: Identify paths that MUST be major (max flow per OD)
+    must_be_major_indices = []
+    for od_idx, paths in multi_path_ods.items():
+        od_flows = x_ref[paths]
+        max_flow_path = paths[np.argmax(od_flows)]
+        must_be_major_indices.append(max_flow_path)
+    
+    must_be_major_set = set(must_be_major_indices)
+    can_be_minor_indices = np.array([p for p in multi_path_indices if p not in must_be_major_set])
+    
+    print("\nSTEP 0: Identify mandatory major paths")
+    print(f"  Paths that MUST be major (max flow per OD): {len(must_be_major_set)}")
+    print(f"  Paths that CAN be minor: {len(can_be_minor_indices)}")
+    
+    # STEP 1: Find maximum number of minor paths
+    # Key insight: Each OD must have ≥1 major path
+    # For an OD with N paths, we can have at most N-1 minor paths
+    # Therefore: max_minor_paths = sum(N-1) for all multi-path ODs
+    #          = total_paths - num_multi_path_ODs
+    
+    max_minor_paths = len(multi_path_indices) - len(multi_path_ods)
+    
+    max_multi_flow = np.max(multi_path_flows)
+    print("\nMulti-path OD analysis:")
+    print(f"  # Multi-path ODs: {len(multi_path_ods)}")
+    print(f"  # Paths in multi-path ODs: {len(multi_path_indices)}")
+    print(f"  Flow range: [{np.min(multi_path_flows):.2f}, {max_multi_flow:.2f}]")
+    print("\nSTEP 1: Maximum number of minor paths")
+    print("  Each OD must have ≥1 major path")
+    print("  For OD with N paths: max N-1 minor paths")
+    print(f"  Total paths in multi-ODs: {len(multi_path_indices)}")
+    print(f"  # Multi-path ODs: {len(multi_path_ods)}")
+    print(f"  Max possible minor paths = {len(multi_path_indices)} - {len(multi_path_ods)} = {max_minor_paths}")
+    
+    # STEP 2: Split max_minor_paths into K equal bins using equally-spaced indices
+    # Sort flows only from paths that CAN be minor (exclude mandatory major paths)
+    can_be_minor_flows = x_ref[can_be_minor_indices]
+    sorted_flows = np.sort(can_be_minor_flows)
+    
+    # Use equally-spaced indices only within max_minor_paths range
+    # First threshold is always 0, last is max flow, rest are equally spaced
+    indices = np.linspace(0, max_minor_paths-1, num_bins, dtype=int)
+    thresholds = sorted_flows[indices].tolist()
+    
+    # Enforce first threshold = 0 and last threshold = max flow
+    thresholds[0] = 0.0
+    
+    print(f"\nSTEP 2: Split into K={num_bins} bins using equally-spaced indices")
+    print(f"  Sorted flows from paths that CAN be minor: {len(sorted_flows)}")
+    print(f"  Indices: {indices.tolist()}")
+    print(f"  Threshold values: {[f'{t:.6f}' for t in thresholds]}")
+    
+    # Remove duplicates while preserving order
+    seen = set()
+    unique_thresholds = []
+    for t in thresholds:
+        if t not in seen:
+            seen.add(t)
+            unique_thresholds.append(t)
+    
+    # Remove 0 threshold
+    # unique_thresholds.remove(0.0)  
+    # Remove max flow threshold (last one)
+    # unique_thresholds.pop()
+
+    print(f"\nFinal thresholds (after removing duplicates): {len(unique_thresholds)} values")
+    print(f"  {[f'{t:.6f}' for t in unique_thresholds]}")
+
+    return unique_thresholds
 
 
 def build_threshold_summary(
@@ -1856,11 +1837,11 @@ def run_threshold_sensitivity_analysis(
 
         # Report compression statistics
         r = svd_dict["r"]
-        compression_ratio = n_minor / r if r > 0 else float("inf")
-        total_vars = n_major + r
-
         svd_time = svd_dict["svd_time"]
+        total_vars = n_major + r
+        
         if n_minor > 0:
+            compression_ratio = n_minor / r if r > 0 else float("inf")
             print(
                 f"  SVD: {n_minor} minor paths → {r} latent variables (compression: {compression_ratio:.2f}x, time: {svd_time:.3f}s)"
             )
@@ -1941,9 +1922,9 @@ def print_link_volume_analysis(result, v_ref, capacity):
     print("\n  Link Volume Analysis:")
     print(f"    Max absolute error: {np.max(np.abs(v_diff)):.2f}")
     print(
-        f"    # links with >10% error: {np.sum(np.abs(v_pct_diff) > 10)}/{len(v)}"
+        f"    links with >10% error: {np.sum(np.abs(v_pct_diff) > 10)}/{len(v)}"
     )
-    print(f"    # congested links (>50% capacity): {np.sum(congested_links)}")
+    print(f"    congested links (>50% capacity): {np.sum(congested_links)}")
     if np.sum(congested_links) > 0:
         print(
             f"    Congested links MAE: {np.mean(np.abs(v_diff[congested_links])):.2f}"
@@ -1964,7 +1945,7 @@ def print_od_violation_analysis(optimizer, result, gamma):
     print(f"      Max violation: {od_details['max_violation_abs']:.7f}")
     print(f"      Mean violation: {od_details['mean_violation_abs']:.7f}")
     print(
-        f"      # OD pairs violated (>{gamma}): {od_details['num_violated']}/{od_details['num_nonzero_od']}"
+        f"      OD pairs violated (>{gamma}): {od_details['num_violated']}/{od_details['num_nonzero_od']}"
     )
     if od_details["worst_od_pairs"]:
         print("    Top violating OD pairs:")
@@ -1990,7 +1971,7 @@ def print_od_violation_analysis(optimizer, result, gamma):
             mean_negative = np.mean(x2[negative_flows]) if n_violations > 0 else 0.0
             max_violation = np.max(-x2[negative_flows])
             
-            print(f"    # Minor paths with negative flow: {n_violations}/{n_minor}")
+            print(f"    Minor paths with negative flow: {n_violations}/{n_minor}")
             print(f"    Min flow (most negative): {min_flow:.7f}")
             print(f"    Mean negative flow: {mean_negative:.7f}")
             print(f"    Max violation magnitude: {max_violation:.7f}")
@@ -2023,13 +2004,10 @@ def print_summary(summary):
         f"    Travel Time R²: {summary['travel_time_r2']:.6f}, MAE: {summary['travel_time_mae']:.6f}"
     )
     print(
-        f"    Time: SVD={summary['svd_time']:.3f}s (CPU)"
+        f"    CPU Time: SVD={summary['svd_time']:.3f}s, Optimization={summary['opt_cpu_time']:.2f}s"
     )
     print(
-        f"    Optimization: {summary['opt_cpu_time']:.2f}s (CPU)"
-    )
-    print(
-        f"    Per-iteration: Outer={summary['per_outer_cpu_time']:.3f}s, Inner={summary['per_inner_cpu_time']:.4f}s (CPU)"
+        f"    Per-iteration CPU Time: Outer={summary['per_outer_cpu_time']:.3f}s, Inner={summary['per_inner_cpu_time']:.4f}s"
     )
     print(f"    Variables reduced by: {summary['reduction_pct']:.1f}%")
     print(f"    Speedup upper bound: {summary['speedup_ub']:.2f}x")
@@ -2106,25 +2084,15 @@ if __name__ == "__main__":
     gamma = 1e-4
 
     data_dir = "chicago_sketch"
+    output_dir = f"./test/{data_dir}/rank{rank}"
 
     link_file = f"data/{data_dir}/link.csv"
     link_perf_file = f"data/{data_dir}/link_performance_ue.csv"
     # link_perf_file = None  # No link performance file provided
+
     route_file = f"data/{data_dir}/columns.csv"
     # demand_file = f"data/{data_dir}/demand.csv"
     demand_file = None  # No demand file provided
-    output_dir = f"./test/{data_dir}/rank{rank}"
-
-    if len(sys.argv) > 1:
-        link_file = sys.argv[1]
-    if len(sys.argv) > 2:
-        route_file = sys.argv[2]
-    if len(sys.argv) > 3:
-        demand_file = sys.argv[3] if sys.argv[3].lower() != "none" else None
-    if len(sys.argv) > 4:
-        output_dir = sys.argv[4]
-    if len(sys.argv) > 5:
-        link_perf_file = sys.argv[5]
 
     print("\n" + "=" * 101)
     print(" COMPRESSED TAP OPTIMIZATION")
