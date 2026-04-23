@@ -674,7 +674,7 @@ class ALM:
         # CONVERGENCE CHECK 3: Penalty maxed out (structural infeasibility)
         if self.c1 >= self.MAX_PENALTY:
             convergence_reason = (
-                f"Penalty maxed (c={self.c1:.0e}), OD violation is structural"
+                f"Penalty maxed (c1={self.c1:.0e}), OD violation is structural"
             )
             return True, convergence_reason
 
@@ -900,7 +900,7 @@ class ALM:
         y = x[: self.s]
         z = x[self.s :] if self.r > 0 else np.array([], dtype=np.float64)
 
-        # Compute link volumes: v = v_singleton + B1^T y + D θ
+        # Compute link volumes: v = v_singleton + B1^T y + B2^T @ (U_r @ z)
         # v_singleton is a constant (pre-computed in __init__)
         if self.v_singleton is not None:
             v = self.v_singleton + self.B1.T @ y
@@ -923,12 +923,12 @@ class ALM:
             od_flow = self.A1 @ y
         od_error = od_flow - self.d_multi
 
-        # ALM terms for OD constraints: λ^T * g + c/2 * ||g||²
+        # ALM terms for OD constraints: lambda_od^T * g + c/2 * ||g||²
         od_lagrangian = self.lambda_od.T @ od_error
         od_penalty = 0.5 * self.c1 * np.sum(od_error**2)
 
-        # Non-negativity constraints for minor paths: U_r*θ ≥ 0 (only if minor paths exist)
-        # Formula (14): (1/2c) * {(max{0, γ - c·[U_r z]})² - γ²}
+        # Non-negativity constraints for minor paths: U_r*z ≥ 0 (only if minor paths exist)
+        # Formula: (1/2c) * {(max{0, mu - c·[U_r z]})² - mu²}
         if self.r > 0:
             max_term_minor = np.maximum(0, self.mu - self.c2 * u)
             minor_penalty_term = (1.0 / (2.0 * self.c2)) * (
@@ -937,7 +937,7 @@ class ALM:
         else:
             minor_penalty_term = 0.0
 
-        # Total augmented Lagrangian (Formula 14)
+        # Total augmented Lagrangian (Formula)
         total_obj = f_bpr + od_lagrangian + od_penalty + minor_penalty_term
 
         # Gradients
@@ -945,18 +945,18 @@ class ALM:
         # But ∂v_singleton/∂y = 0 and ∂v_singleton/∂z = 0 (constant doesn't affect gradients)
         grad_v = bpr_gradient(v, self.capacity, self.t_0, self.alpha, self.beta)
 
-        # Gradient w.r.t. y: ∂f/∂y = B1 @ grad_v + A1^T @ (λ + c*error)
+        # Gradient w.r.t. y: ∂f/∂y = B1 @ grad_v + A1^T @ (lambda_od + c1*error)
         grad_y = self.B1 @ grad_v
         grad_y += self.A1.T @ (self.lambda_od + self.c1 * od_error)
 
-        # Gradient w.r.t. z (CORRECTED KKT PROJECTION FORMULA, only if minor paths exist)
+        # Gradient w.r.t. z (only if minor paths exist)
         if self.r > 0:
             # tmp = B2 @ grad_v  +  A2.T @ (lambda_od + c1 * od_error)
             tmp = self.B2 @ grad_v
             tmp += self.A2.T @ (self.lambda_od + self.c1 * od_error)
             # map back to z space
             grad_z = self.U_r.T @ tmp
-            # KKT projection gradient: -U_r^T max{0, mu - mu·w}
+            # KKT projection gradient: -U_r^T max{0, mu - c2·[U_r z]}
             grad_z -= self.U_r.T @ np.maximum(0, self.mu - self.c2 * u)
             # Combine gradients
             grad = np.concatenate([grad_y, grad_z])
@@ -1021,7 +1021,7 @@ class ALM:
         if self.r > 0:
             # BPR gradient contribution: D^T @ grad_v
             grad_z = self.D.T @ grad_v
-            # OD constraint gradient using direct M^T: M^T @ (λ + c*error)
+            # OD constraint gradient using direct M^T: M^T @ (lambda_od + c1*error)
             grad_z += self.M.T @ (self.lambda_od + self.c1 * od_error)
             # KKT projection for non-negativity
             grad_z -= self.U_r.T @ np.maximum(0, self.mu - self.c2 * u)
@@ -1093,7 +1093,7 @@ class ALM:
         if self.r > 0:
             # BPR gradient contribution: D^T @ grad_v
             grad_z = self.D.T @ grad_v
-            # OD constraint gradient using direct M^T: M^T @ (λ + c*error)
+            # OD constraint gradient using direct M^T: M^T @ (lambda_od + c*error)
             grad_z += self.M.T @ dual_od
             # KKT projection for non-negativity (reuse max_term_minor)
             grad_z -= self.U_r.T @ max_term_minor
@@ -1106,7 +1106,9 @@ class ALM:
     def objective_and_gradient_factored(self, x):
         """Compute augmented Lagrangian using factored form V_r @ (sigma * z) - SPARSE FRIENDLY
 
-        The factored form precomputes the expensive B2.T @ U_r once during setup
+        The factored form uses V_r and sigma directly from the SVD, avoiding the need to
+        form or store B2.T @ U_r (contrast with objective_and_gradient_direct which precomputes
+        D = B2.T @ U_r)
 
         MATHEMATICAL FOUNDATION:
         ========================
@@ -1139,7 +1141,7 @@ class ALM:
         ========================
         The factored form exploits the SVD relationship: B2.T @ U_r = V_r @ diag(sigma)
 
-        Chain rule method (objective_and_gradient):
+        Chain rule method (objective_and_gradient_chain_rule):
             v += B2.T @ (U_r @ z)
             grad_z += U_r.T @ (B2 @ grad_v)
 
@@ -1202,7 +1204,7 @@ class ALM:
             # BPR gradient: factored form diag(sigma) @ V_r^T @ grad_v
             # Element-wise scaling after sparse op
             grad_z = self.sigma * (self.V_r.T @ grad_v)
-            # OD constraint: M^T @ (λ + c*error)
+            # OD constraint: M^T @ (lambda_od + c1*error)
             grad_z += self.M.T @ (self.lambda_od + self.c1 * od_error)
             # KKT projection for non-negativity
             grad_z -= self.U_r.T @ np.maximum(0, self.mu - self.c2 * u)
@@ -1311,17 +1313,17 @@ class ALM:
         stagnation_window=3,
         verbose=True,
     ):
-        """Run Augmented Lagrangian Method (KKT projection + stagnation detection)"""
-        x, y, z, bounds = self.initialize_solution(
-            enable_warm_start=False, enable_proportional_cold_start=True
-        )
-
+        """Run Augmented Lagrangian Method"""
         options = {
             "maxiter": max_inner_iter,
             "disp": False,
             "gtol": 1e-6,
             "ftol": 1e-9,
         }
+
+        x, y, z, bounds = self.initialize_solution(
+            enable_warm_start=False, enable_proportional_cold_start=True
+        )
 
         if verbose:
             self.print_header()
@@ -1437,7 +1439,7 @@ class ALM:
             else:
                 od_flow = self.A1 @ y
 
-        # Standard ALM update for OD conservation: λ^(k+1) = λ^k + c*(od_flow - d)
+        # Standard ALM update for OD conservation: lambda_od^(k+1) = lambda_od^k + c1*(od_flow - d)
         od_error = od_flow - self.d_multi
         self.lambda_od += self.c1 * od_error
 
