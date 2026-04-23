@@ -1,5 +1,5 @@
 """
-Threshold Sensitivity Analysis for Bertsekas ALM with KKT Projection Gradient (FILTERED VERSION)
+Threshold Sensitivity Analysis for ALM with KKT Projection Gradient (FILTERED VERSION)
 - Tests different threshold values for major/minor path decomposition
 - Analyzes impact on compression ratio, accuracy, and computational efficiency
 - Compares trade-offs between model complexity and solution quality
@@ -19,15 +19,16 @@ os.environ["OMP_NUM_THREADS"] = "1"
 os.environ["MKL_NUM_THREADS"] = "1"
 os.environ["OPENBLAS_NUM_THREADS"] = "1"
 
+import time
+import warnings
+from pathlib import Path
+
 import numpy as np
 import pandas as pd
+from scipy.optimize import minimize
 from scipy.sparse import csr_matrix
 from scipy.sparse.linalg import svds
-from scipy.optimize import minimize
 from sklearn.decomposition import TruncatedSVD
-import time
-from pathlib import Path
-import warnings
 
 warnings.filterwarnings("ignore")
 
@@ -46,7 +47,9 @@ def _detect_column(df, candidates, context):
     )
 
 
-def load_gmns_data_with_od(link_file, route_file, demand_file=None, link_perf_file=None):
+def load_gmns_data_with_od(
+    link_file, route_file, demand_file=None, link_perf_file=None
+):
     """Load GMNS network data with OD demand"""
     links = pd.read_csv(link_file)
     routes = pd.read_csv(route_file)
@@ -62,7 +65,9 @@ def load_gmns_data_with_od(link_file, route_file, demand_file=None, link_perf_fi
     link_id_col = _detect_column(links, ["link_id", "linkid", "id"], "link_id")
     ref_vol_col = None
     if link_perf is not None:
-        perf_link_id_col = _detect_column(link_perf, ["link_id", "linkid", "id"], "link_id")
+        perf_link_id_col = _detect_column(
+            link_perf, ["link_id", "linkid", "id"], "link_id"
+        )
         ref_vol_col = _detect_column(
             link_perf,
             ["volume", "link_volume", "obs_volume", "ref_volume", "reference_volume"],
@@ -257,7 +262,7 @@ def load_gmns_data_with_od(link_file, route_file, demand_file=None, link_perf_fi
 
 def decompose_paths(B, x_ref, od_info, threshold, add_singleton_category=True):
     """Decompose paths into three categories: singleton, major, and minor
-    
+
     Strategy:
     1. First identify singleton OD pairs (ODs with only 1 path)
     2. All paths from singleton ODs go to "singleton" category (regardless of flow)
@@ -267,25 +272,25 @@ def decompose_paths(B, x_ref, od_info, threshold, add_singleton_category=True):
     """
     n_od = od_info["n_od"]
     path_to_od = od_info["path_to_od"]
-    
+
     # Step 1: Count paths per OD pair
     od_path_counts = np.zeros(n_od, dtype=int)
     for path_idx in range(len(x_ref)):
         od_idx = path_to_od[path_idx]
         od_path_counts[od_idx] += 1
-    
+
     # Step 2: Identify singleton OD pairs (only 1 path)
     singleton_od_mask = od_path_counts == 1
-    
+
     print(f"  OD analysis: {n_od} total ODs")
     print(f"    Singleton ODs (1 path): {np.sum(singleton_od_mask)}")
     print(f"    Multi-path ODs (2+ paths): {np.sum(~singleton_od_mask)}")
-    
+
     # Step 3: Partition paths into three categories
     singleton_mask = np.zeros(len(x_ref), dtype=bool)
     major_mask = np.zeros(len(x_ref), dtype=bool)
     minor_mask = np.zeros(len(x_ref), dtype=bool)
-    
+
     for path_idx in range(len(x_ref)):
         od_idx = path_to_od[path_idx]
         if singleton_od_mask[od_idx]:
@@ -317,20 +322,20 @@ def decompose_paths(B, x_ref, od_info, threshold, add_singleton_category=True):
                 if minor_mask[best_path]:
                     minor_mask[best_path] = False
                 major_mask[best_path] = True
-    
+
     # Extract path sets
     B_singleton = B[singleton_mask]
     B1 = B[major_mask]
     B2 = B[minor_mask]
-    
+
     x_singleton_ref = x_ref[singleton_mask]
     x1_ref = x_ref[major_mask]
     x2_ref = x_ref[minor_mask]
-    
+
     singleton_indices = np.where(singleton_mask)[0]
     major_indices = np.where(major_mask)[0]
     minor_indices = np.where(minor_mask)[0]
-    
+
     n_singleton = np.sum(singleton_mask)
     s = np.sum(major_mask)
     n_minor = np.sum(minor_mask)
@@ -350,9 +355,7 @@ def decompose_paths(B, x_ref, od_info, threshold, add_singleton_category=True):
     print(f"    Minor paths (flow < {threshold}, multi-path ODs): {n_minor}")
     print(f"    Total: {n_singleton + s + n_minor}")
     print("  Flow distribution:")
-    print(
-        f"    Singleton flow: {singleton_flow:.2f} ({singleton_flow_pct:.1f}%)"
-    )
+    print(f"    Singleton flow: {singleton_flow:.2f} ({singleton_flow_pct:.1f}%)")
     print(f"    Major flow: {major_flow:.2f} ({major_flow_pct:.1f}%)")
     print(f"    Minor flow: {minor_flow:.2f} ({minor_flow_pct:.1f}%)")
     print(f"    Total flow: {total_flow:.2f}")
@@ -362,7 +365,10 @@ def decompose_paths(B, x_ref, od_info, threshold, add_singleton_category=True):
     for col_idx, path_idx in enumerate(singleton_indices):
         A_singleton_row.append(path_to_od[path_idx])
         A_singleton_col.append(col_idx)
-    A_singleton = csr_matrix((np.ones(len(A_singleton_row)), (A_singleton_row, A_singleton_col)), shape=(n_od, n_singleton))
+    A_singleton = csr_matrix(
+        (np.ones(len(A_singleton_row)), (A_singleton_row, A_singleton_col)),
+        shape=(n_od, n_singleton),
+    )
 
     # Build A1 (major paths to OD)
     A1_row, A1_col = [], []
@@ -407,7 +413,9 @@ def decompose_paths(B, x_ref, od_info, threshold, add_singleton_category=True):
     }
 
 
-def compute_svd_compression(B2, x2_ref, rank_pct=0.30, max_rank=50, use_truncated_svd=True):
+def compute_svd_compression(
+    B2, x2_ref, rank_pct=0.30, max_rank=50, use_truncated_svd=True
+):
     """Compute SVD compression using TruncatedSVD for large sparse matrices"""
     n_minor, m = B2.shape
     if n_minor == 0:
@@ -499,9 +507,11 @@ def bpr_gradient(v, capacity, t_0, alpha=0.15, beta=4.0):
     """Gradient of BPR objective (with t_0 scaling)"""
     return t_0 * alpha * (v / capacity) ** beta
 
+
 ################################################################################
 # ALM OPTIMIZER
 ################################################################################
+
 
 class ALM:
     """ALM optimizer"""
@@ -574,22 +584,24 @@ class ALM:
 
         self.major_mask = decomp["major_mask"]
         self.minor_mask = decomp["minor_mask"]
-        
+
         # FILTERED VERSION: d_multi only includes multi-path ODs (dimension reduction)
         # Singleton OD conservation is satisfied by construction (x_singleton = d_singleton)
         self.d = od_info["od_demand"].copy()
         self.k_total = len(self.d)  # Total number of ODs (including singleton)
-        
+
         if self.n_singleton > 0:
             path_to_od = od_info["path_to_od"]
             singleton_indices = decomp["singleton_indices"]
             singleton_ods = set([path_to_od[i] for i in singleton_indices])
             # Create boolean mask: True for multi-path ODs, False for singleton ODs
-            self.multi_od_mask = np.array([od_idx not in singleton_ods for od_idx in range(self.k_total)])
+            self.multi_od_mask = np.array(
+                [od_idx not in singleton_ods for od_idx in range(self.k_total)]
+            )
             # Extract only multi-path OD demands (dimension reduction)
             self.d_multi = self.d[self.multi_od_mask]
             self.k = len(self.d_multi)  # Number of multi-path ODs only
-            
+
             # Filter A1, A2 to only include multi-path OD rows
             self.A1 = self.A1[self.multi_od_mask, :]
             self.A2 = self.A2[self.multi_od_mask, :]
@@ -618,7 +630,7 @@ class ALM:
         self.tau = tau
         self.gamma = gamma
         self.MAX_PENALTY = 1e20
-        
+
         # Track previous violations for adaptive penalty updates
         self.prev_od_viol = None
         self.prev_minor_viol = None
@@ -681,9 +693,7 @@ class ALM:
             minor_penalty_term = 0.0
 
         # Total augmented Lagrangian (Formula 14)
-        total_obj = (
-            f_bpr + od_lagrangian + od_penalty + minor_penalty_term
-        )
+        total_obj = f_bpr + od_lagrangian + od_penalty + minor_penalty_term
 
         # Gradients
         # Note: grad_v computed from v (which includes v_singleton)
@@ -714,7 +724,7 @@ class ALM:
 
     def objective_and_gradient_direct(self, z):
         """Compute augmented Lagrangian using direct M matrix multiplication
-        
+
         This version explicitly computes M*θ for OD flow calculation.
         Useful when M is sparse and direct multiplication is efficient.
         """
@@ -860,42 +870,42 @@ class ALM:
         """Compute augmented Lagrangian using factored form V_r @ (sigma * theta) - SPARSE FRIENDLY
 
         The factored form precomputes the expensive B2.T @ U_r once during setup
-        
+
         MATHEMATICAL FOUNDATION:
         ========================
         The factored form relies on the SVD relationship: B2.T @ U_r = V_r @ diag(sigma)
-        
+
         PROOF:
         ------
         Starting from SVD of B2:
             B2 = U_r @ Sigma @ V_r^T                    [SVD decomposition]
-        
+
         where U_r and V_r have orthonormal columns:
             U_r^T @ U_r = I_r    (r × r identity)
             V_r^T @ V_r = I_r
-        
+
         Taking transpose of B2:
             B2^T = (U_r @ Sigma @ V_r^T)^T
             B2^T = V_r @ Sigma @ U_r^T                  [transpose property]
-        
+
         Right multiply both sides by U_r:
             B2^T @ U_r = V_r @ Sigma @ U_r^T @ U_r
             B2^T @ U_r = V_r @ Sigma @ I_r              [orthonormality]
             B2^T @ U_r = V_r @ Sigma                    [QED]
-        
+
         Therefore: B2^T @ U_r @ theta = V_r @ Sigma @ theta = V_r @ (sigma * theta)
-        
+
         Similarly for gradient: (B2^T @ U_r)^T = Sigma^T @ V_r^T = Sigma @ V_r^T
         So: U_r^T @ B2 @ grad_v = sigma * (V_r^T @ grad_v)
-        
+
         COMPUTATIONAL ADVANTAGE:
         ========================
         The factored form exploits the SVD relationship: B2.T @ U_r = V_r @ diag(sigma)
-        
+
         Chain rule method (objective_and_gradient):
             v += B2.T @ (U_r @ theta)
             grad_theta += U_r.T @ (B2 @ grad_v)
-            
+
         Factored method (this function):
             v += V_r @ (sigma * theta)
             grad_theta += sigma * (V_r.T @ grad_v)
@@ -955,7 +965,8 @@ class ALM:
         # Gradient w.r.t. θ (using factored form)
         if self.r > 0:
             # BPR gradient: factored form diag(sigma) @ V_r^T @ grad_v
-            grad_theta = self.sigma * (self.V_r.T @ grad_v)  # Element-wise scaling after sparse op
+            # Element-wise scaling after sparse op
+            grad_theta = self.sigma * (self.V_r.T @ grad_v) 
             # OD constraint: M^T @ (λ + ρ*error)
             grad_theta += self.M.T @ (self.lambda_od + self.rho_od * od_error)
             # KKT projection for non-negativity
@@ -970,23 +981,23 @@ class ALM:
 
     def objective_and_gradient_mixed(self, z):
         """Compute augmented Lagrangian using MIXED approach
-        
+
         This function combines:
         1. Factored form for LINK VOLUMES: v += V_r @ (sigma * theta)
            - Exploits sparsity in V_r for BPR computation
            - Fast for sparse compression methods
-           
+
         2. Chain rule for OD FLOW: od_flow = A1*x1 + A2*(U_r@theta)
            - Uses chain multiplication through U_r
            - Avoids storing M matrix explicitly
-        
+
         RATIONALE:
         ==========
         - Link volumes dominate computational cost (evaluated every iteration, large gradient)
         - OD flow is cheaper (smaller constraint set, k << m_links)
         - Factored form provides 10-100x speedup for sparse V_r in BPR computation
         - Chain rule for OD avoids storing dense M matrix (memory efficient)
-        
+
         WHEN TO USE:
         ============
         - Sparse compression (column_subset, random_projection) with memory constraints
@@ -1052,7 +1063,9 @@ class ALM:
             # BPR gradient: FACTORED form (sparse-friendly)
             grad_theta = self.sigma * (self.V_r.T @ grad_v)
             # OD constraint: CHAIN RULE form (memory efficient)
-            grad_theta += self.U_r.T @ (self.A2.T @ (self.lambda_od + self.rho_od * od_error))
+            grad_theta += self.U_r.T @ (
+                self.A2.T @ (self.lambda_od + self.rho_od * od_error)
+            )
             # KKT projection for non-negativity
             grad_theta -= self.U_r.T @ np.maximum(
                 0, self.lambda_minor - self.rho_nonneg_minor * u
@@ -1065,7 +1078,7 @@ class ALM:
 
     def compute_violations(self, x1, theta):
         """Compute constraint violations for equality constraints
-        
+
         Returns:
             od_violation: Maximum OD conservation violation
             nonneg_minor_violation: Maximum minor path non-negativity violation
@@ -1224,7 +1237,7 @@ class ALM:
 
     def update_multipliers(self, x1, theta, u_cached=None, od_flow_cached=None):
         """Update Lagrangian multipliers using standard ALM update
-        
+
         Args:
             x1: Major path flows
             theta: Latent variables
@@ -1253,7 +1266,7 @@ class ALM:
 
     def update_penalties(self, od_viol, minor_viol, eta=0.25):
         """Adaptive penalty update: only increase if violation doesn't decrease sufficiently
-        
+
         Args:
             od_viol: Current OD constraint violation
             minor_viol: Current minor path non-negativity violation
@@ -1267,7 +1280,7 @@ class ALM:
                 # Violation didn't decrease enough, increase penalty
                 self.rho_od = min(self.rho_od * self.tau, self.MAX_PENALTY)
             # else: keep penalty the same (violation decreased sufficiently)
-        
+
         # Store current violation for next iteration
         self.prev_od_viol = od_viol
 
@@ -1280,7 +1293,7 @@ class ALM:
                     self.rho_nonneg_minor * self.tau, self.MAX_PENALTY
                 )
             # else: keep penalty the same (violation decreased sufficiently)
-        
+
         # Store current violation for next iteration
         self.prev_minor_viol = minor_viol
 
@@ -1291,7 +1304,7 @@ class ALM:
         stagnation_tol,
         stagnation_window,
         outer_iter,
-        max_outer_iter
+        max_outer_iter,
     ):
         # CONVERGENCE CHECK 1: Constraint satisfaction
         if od_viol < self.gamma and minor_viol < self.gamma:
@@ -1329,12 +1342,7 @@ class ALM:
 
         return False, None
 
-    def update_history(
-        self,
-        result,
-        metrics,
-        od_viol
-    ):
+    def update_history(self, result, metrics, od_viol):
         self.history["inner_iter"].append(result.nit)
         self.history["bpr_pure"].append(metrics["bpr_pure"])
         self.history["od_violation"].append(od_viol)
@@ -1400,7 +1408,18 @@ class ALM:
         )
         print(f"{'-' * 116}")
 
-    def print_iteration_metrics(self, outer_iter, result, metrics, od_viol, minor_viol, inner_time, outer_time, initial_rho_od, initial_rho_nonneg_minor):
+    def print_iteration_metrics(
+        self,
+        outer_iter,
+        result,
+        metrics,
+        od_viol,
+        minor_viol,
+        inner_time,
+        outer_time,
+        initial_rho_od,
+        initial_rho_nonneg_minor,
+    ):
         status = "S" if result.success else "F"
         print(
             f"{outer_iter:>6} {result.nit:>6} {status:>6} {result.fun:>12.4e} "
@@ -1456,19 +1475,23 @@ class ALM:
             theta = z[self.s :] if self.r > 0 else np.array([], dtype=np.float64)
 
             # Check convergence and cache intermediate computations
-            od_viol, minor_viol, u_cached, od_flow_cached = self.compute_violations(x1, theta)
+            od_viol, minor_viol, u_cached, od_flow_cached = self.compute_violations(
+                x1, theta
+            )
             has_converged, convergence_reason = self.check_convergence(
                 od_viol,
                 minor_viol,
                 stagnation_tol,
                 stagnation_window,
                 outer_iter,
-                max_outer_iter            
+                max_outer_iter,
             )
 
             if not has_converged:
                 # Reuse cached values to avoid redundant computations
-                self.update_multipliers(x1, theta, u_cached=u_cached, od_flow_cached=od_flow_cached)
+                self.update_multipliers(
+                    x1, theta, u_cached=u_cached, od_flow_cached=od_flow_cached
+                )
                 self.update_penalties(od_viol, minor_viol, eta=0.25)
 
             outer_cpu_time = time.process_time() - outer_cpu_start
@@ -1478,17 +1501,13 @@ class ALM:
                 v = self.v_singleton + self.B1.T @ x1
             else:
                 v = self.B1.T @ x1
-            
+
             if self.r > 0:
                 # Reuse cached u instead of recomputing U_r @ theta
                 v += self.B2.T.dot(u_cached)
 
             metrics = self.compute_metrics(x1, v)
-            self.update_history(
-                result,
-                metrics,
-                od_viol
-            )
+            self.update_history(result, metrics, od_viol)
 
             if verbose:
                 self.print_iteration_metrics(
@@ -1500,7 +1519,7 @@ class ALM:
                     inner_time=inner_cpu_time,
                     outer_time=outer_cpu_time,
                     initial_rho_od=initial_rho_od,
-                    initial_rho_nonneg_minor=initial_rho_nonneg_minor
+                    initial_rho_nonneg_minor=initial_rho_nonneg_minor,
                 )
 
             if has_converged:
@@ -1530,8 +1549,9 @@ class ALM:
 # THRESHOLD SENSITIVITY ANALYSIS
 ################################################################################
 
+
 def analyze_path_flow_distribution(x_ref):
-    """ Analyze flow distribution (excluding zeros for percentiles) """
+    """Analyze flow distribution (excluding zeros for percentiles)"""
     # Remove NaN values first
     x_valid = x_ref[~np.isnan(x_ref)]
     x_nonzero = x_valid[x_valid > 0]
@@ -1561,73 +1581,79 @@ def analyze_path_flow_distribution(x_ref):
     print(f"    70th: {flow_percentiles[6]:.2f}")
     print(f"    80th: {flow_percentiles[7]:.2f}")
     print(f"    90th: {flow_percentiles[8]:.2f}")
-    
+
     return flow_percentiles
 
 
 def setup_thresholds(x_ref, od_info=None, num_bins=11):
     """Setup threshold values for major/minor path decomposition
-    
+
     New approach: Adaptively select thresholds that proportionally split paths into K bins
-    
+
     Args:
         x_ref: Reference path flows
         od_info: OD information dict with 'path_to_od' mapping
         num_bins: Number of bins to split paths into (default: 11)
-    
+
     Returns:
         List of threshold values that split the path set into K equal-sized bins
-        
+
     Logic:
         - Each OD must have at least one major path (threshold < max flow for that OD)
         - Use multi-path OD flows only (single-path ODs are not affected by thresholds)
         - Select thresholds at quantiles: 0%, 1/(K-1)*100%, 2/(K-1)*100%, ..., 100%
         - This ensures each bin contains approximately the same number of paths
     """
-    if od_info is None or 'path_to_od' not in od_info:
+    if od_info is None or "path_to_od" not in od_info:
         raise Exception("\nError: od_info not provided or no 'path_to_od' mapping")
 
     # Identify multi-path ODs (ODs with more than 1 path)
-    path_to_od = od_info['path_to_od']
+    path_to_od = od_info["path_to_od"]
     od_path_counts = {}
-    
+
     for path_idx, od_idx in enumerate(path_to_od):
         if od_idx not in od_path_counts:
             od_path_counts[od_idx] = []
         od_path_counts[od_idx].append(path_idx)
-    
+
     # Get paths belonging to multi-path ODs
-    multi_path_ods = {od_idx: paths for od_idx, paths in od_path_counts.items() if len(paths) > 1}
-    multi_path_indices = [path_idx for paths in multi_path_ods.values() for path_idx in paths]
+    multi_path_ods = {
+        od_idx: paths for od_idx, paths in od_path_counts.items() if len(paths) > 1
+    }
+    multi_path_indices = [
+        path_idx for paths in multi_path_ods.values() for path_idx in paths
+    ]
 
     if len(multi_path_ods) == 0:
         raise Exception("\nError: No multi-path ODs found")
-    
+
     # Get flows for multi-path OD paths only
     multi_path_flows = x_ref[multi_path_indices]
-    
+
     # STEP 0: Identify paths that MUST be major (max flow per OD)
     must_be_major_indices = []
     for od_idx, paths in multi_path_ods.items():
         od_flows = x_ref[paths]
         max_flow_path = paths[np.argmax(od_flows)]
         must_be_major_indices.append(max_flow_path)
-    
+
     must_be_major_set = set(must_be_major_indices)
-    can_be_minor_indices = np.array([p for p in multi_path_indices if p not in must_be_major_set])
-    
+    can_be_minor_indices = np.array(
+        [p for p in multi_path_indices if p not in must_be_major_set]
+    )
+
     print("\nSTEP 0: Identify mandatory major paths")
     print(f"  Paths that MUST be major (max flow per OD): {len(must_be_major_set)}")
     print(f"  Paths that CAN be minor: {len(can_be_minor_indices)}")
-    
+
     # STEP 1: Find maximum number of minor paths
     # Key insight: Each OD must have ≥1 major path
     # For an OD with N paths, we can have at most N-1 minor paths
     # Therefore: max_minor_paths = sum(N-1) for all multi-path ODs
     #          = total_paths - num_multi_path_ODs
-    
+
     max_minor_paths = len(multi_path_indices) - len(multi_path_ods)
-    
+
     max_multi_flow = np.max(multi_path_flows)
     print("\nMulti-path OD analysis:")
     print(f"  # Multi-path ODs: {len(multi_path_ods)}")
@@ -1638,26 +1664,28 @@ def setup_thresholds(x_ref, od_info=None, num_bins=11):
     print("  For OD with N paths: max N-1 minor paths")
     print(f"  Total paths in multi-ODs: {len(multi_path_indices)}")
     print(f"  # Multi-path ODs: {len(multi_path_ods)}")
-    print(f"  Max possible minor paths = {len(multi_path_indices)} - {len(multi_path_ods)} = {max_minor_paths}")
-    
+    print(
+        f"  Max possible minor paths = {len(multi_path_indices)} - {len(multi_path_ods)} = {max_minor_paths}"
+    )
+
     # STEP 2: Split max_minor_paths into K equal bins using equally-spaced indices
     # Sort flows only from paths that CAN be minor (exclude mandatory major paths)
     can_be_minor_flows = x_ref[can_be_minor_indices]
     sorted_flows = np.sort(can_be_minor_flows)
-    
+
     # Use equally-spaced indices only within max_minor_paths range
     # First threshold is always 0, last is max flow, rest are equally spaced
-    indices = np.linspace(0, max_minor_paths-1, num_bins, dtype=int)
+    indices = np.linspace(0, max_minor_paths - 1, num_bins, dtype=int)
     thresholds = sorted_flows[indices].tolist()
-    
+
     # Enforce first threshold = 0 and last threshold = max flow
     thresholds[0] = 0.0
-    
+
     print(f"\nSTEP 2: Split into K={num_bins} bins using equally-spaced indices")
     print(f"  Sorted flows from paths that CAN be minor: {len(sorted_flows)}")
     print(f"  Indices: {indices.tolist()}")
     print(f"  Threshold values: {[f'{t:.6f}' for t in thresholds]}")
-    
+
     # Remove duplicates while preserving order
     seen = set()
     unique_thresholds = []
@@ -1665,13 +1693,15 @@ def setup_thresholds(x_ref, od_info=None, num_bins=11):
         if t not in seen:
             seen.add(t)
             unique_thresholds.append(t)
-    
+
     # Remove 0 threshold
-    # unique_thresholds.remove(0.0)  
+    # unique_thresholds.remove(0.0)
     # Remove max flow threshold (last one)
     # unique_thresholds.pop()
 
-    print(f"\nFinal thresholds (after removing duplicates): {len(unique_thresholds)} values")
+    print(
+        f"\nFinal thresholds (after removing duplicates): {len(unique_thresholds)} values"
+    )
     print(f"  {[f'{t:.6f}' for t in unique_thresholds]}")
 
     return unique_thresholds
@@ -1790,9 +1820,7 @@ def compute_svd_for_threshold(decomp, n_minor, rank, threshold):
         }
 
     # SVD compression for minor paths
-    svd_dict = compute_svd_compression(
-        decomp["B2"], decomp["x2_ref"], max_rank=rank
-    )
+    svd_dict = compute_svd_compression(decomp["B2"], decomp["x2_ref"], max_rank=rank)
     if svd_dict is None:
         print(f"   SVD compression failed - skipping threshold {threshold}")
     return svd_dict
@@ -1808,7 +1836,9 @@ def _print_compression_stats(svd_dict, n_minor, n_major):
         print(
             f"  SVD: {n_minor} minor paths → {r} latent variables (compression: {compression_ratio:.2f}x, time: {svd_time:.3f}s)"
         )
-    print(f"  Total decision variables: {total_vars} (vs {n_major + n_minor} original paths)")
+    print(
+        f"  Total decision variables: {total_vars} (vs {n_major + n_minor} original paths)"
+    )
 
     return r, svd_time, total_vars, compression_ratio
 
@@ -1864,7 +1894,9 @@ def run_threshold_sensitivity_analysis(
         prev_config = current_config  # Update for next iteration
 
         # Report compression statistics
-        r, svd_time, total_vars, compression_ratio = _print_compression_stats(svd_dict, n_minor, n_major)
+        r, svd_time, total_vars, compression_ratio = _print_compression_stats(
+            svd_dict, n_minor, n_major
+        )
 
         # Optimize
         try:
@@ -1940,9 +1972,7 @@ def print_link_volume_analysis(result, v_ref, capacity):
 
     print("\n  Link Volume Analysis:")
     print(f"    Max absolute error: {np.max(np.abs(v_diff)):.2f}")
-    print(
-        f"    links with >10% error: {np.sum(np.abs(v_pct_diff) > 10)}/{len(v)}"
-    )
+    print(f"    links with >10% error: {np.sum(np.abs(v_pct_diff) > 10)}/{len(v)}")
     print(f"    congested links (>50% capacity): {np.sum(congested_links)}")
     if np.sum(congested_links) > 0:
         print(
@@ -1973,30 +2003,30 @@ def print_od_violation_analysis(optimizer, result, gamma):
                 f"      {i}. OD #{od_pair['od_index']}: demand={od_pair['demand']:.1f}, "
                 f"predicted={od_pair['predicted']:.1f}, error={od_pair['error_abs']:.7f}"
             )
-    
+
     # Minor path non-negativity violation details
     if optimizer.r > 0:
         print("  Minor Path Non-negativity Details:")
         # Already computed in get_od_violation_details
-        x2 = optimizer.x2 
+        x2 = optimizer.x2
         n_minor = len(x2)
-        
+
         # Count violations
         negative_flows = x2 < -gamma
         n_violations = np.sum(negative_flows)
-        
+
         if n_violations > 0:
             min_flow = np.min(x2)
             mean_negative = np.mean(x2[negative_flows]) if n_violations > 0 else 0.0
             max_violation = np.max(-x2[negative_flows])
-            
+
             print(f"    Minor paths with negative flow: {n_violations}/{n_minor}")
             print(f"    Min flow (most negative): {min_flow:.7f}")
             print(f"    Mean negative flow: {mean_negative:.7f}")
             print(f"    Max violation magnitude: {max_violation:.7f}")
-            
+
             # Show worst violators
-            worst_indices = np.argsort(x2)[:min(3, n_violations)]
+            worst_indices = np.argsort(x2)[: min(3, n_violations)]
             print("    Top violating minor paths:")
             for i, idx in enumerate(worst_indices, 1):
                 print(f"      {i}. Path #{idx}: flow={x2[idx]:.7f}")
@@ -2010,15 +2040,11 @@ def print_od_violation_analysis(optimizer, result, gamma):
 def print_summary(summary):
     print("\n  Summary:")
     print(f"    Converged: {summary['converged']}")
-    print(
-        f"    BPR: {summary['bpr_pure']:.4e} (Optimal: {summary['bpr_optimal']:.4e})"
-    )
+    print(f"    BPR: {summary['bpr_pure']:.4e} (Optimal: {summary['bpr_optimal']:.4e})")
     print(
         f"    BPR Gap: {summary['bpr_gap_pct']:.3f}% {'(Better!)' if summary['bpr_gap_pct'] < 0 else ''}"
     )
-    print(
-        f"    Link R²: {summary['link_r2']:.6f}, MAE: {summary['link_mae']:.2f}"
-    )
+    print(f"    Link R²: {summary['link_r2']:.6f}, MAE: {summary['link_mae']:.2f}")
     print(
         f"    Travel Time R²: {summary['travel_time_r2']:.6f}, MAE: {summary['travel_time_mae']:.6f}"
     )
@@ -2041,9 +2067,7 @@ def print_summary_table(results_df):
     print(f"{'=' * 210}")
 
     # Calculate speedup relative to first (threshold=0) run
-    baseline_time = (
-        results_df.loc[0, "opt_cpu_time"] if len(results_df) > 0 else 1.0
-    )
+    baseline_time = results_df.loc[0, "opt_cpu_time"] if len(results_df) > 0 else 1.0
     results_df["speedup_cpu_time"] = baseline_time / results_df["opt_cpu_time"]
 
     # Select columns for summary
