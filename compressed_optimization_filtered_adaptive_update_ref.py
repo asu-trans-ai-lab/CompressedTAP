@@ -1336,6 +1336,7 @@ class BertsekasALM:
         stagnation_tol,
         stagnation_window,
         outer_iter,
+        max_outer_iter
     ):
         # CONVERGENCE CHECK 1: Constraint satisfaction
         if od_viol < self.gamma and minor_viol < self.gamma:
@@ -1365,6 +1366,10 @@ class BertsekasALM:
                 f"Penalty maxed (ρ={self.rho_od:.0e}), OD violation is structural"
             )
             return True, convergence_reason
+
+        if outer_iter == max_outer_iter - 1:
+            convergence_reason = f"Max iterations ({max_outer_iter}) reached"
+            return False, convergence_reason
 
         return False, None
 
@@ -1459,9 +1464,11 @@ class BertsekasALM:
         max_inner_iter=50,
         stagnation_tol=1e-6,
         stagnation_window=3,
+        verbose=True,
     ):
         """Run Bertsekas ALM with KKT projection and stagnation detection"""
-        verbose = True
+        if verbose:
+            self.print_header()
 
         convergence_reason = "Max iterations reached"
 
@@ -1469,8 +1476,12 @@ class BertsekasALM:
             enable_warm_start=False, enable_proportional_cold_start=True
         )
 
-        if verbose:
-            self.print_header()
+        options = {
+            "maxiter": max_inner_iter,
+            "disp": False,
+            "gtol": 1e-6,
+            "ftol": 1e-9,
+        }
 
         for outer_iter in range(max_outer_iter):
             outer_cpu_start = time.process_time()
@@ -1479,12 +1490,6 @@ class BertsekasALM:
             initial_rho_od = self.rho_od
             initial_rho_nonneg_minor = self.rho_nonneg_minor
 
-            options = {
-                "maxiter": max_inner_iter,
-                "disp": False,
-                "gtol": 1e-6,
-                "ftol": 1e-9,
-            }
 
             inner_cpu_start = time.process_time()
             result = minimize(
@@ -1508,7 +1513,8 @@ class BertsekasALM:
                 minor_viol,
                 stagnation_tol,
                 stagnation_window,
-                outer_iter            
+                outer_iter,
+                max_outer_iter            
             )
 
             if not has_converged:
@@ -1550,15 +1556,6 @@ class BertsekasALM:
 
             if has_converged:
                 break
-
-        else:
-            # Loop completed without break
-            convergence_reason = f"Max iterations ({max_outer_iter}) reached"
-            if verbose:
-                print(f"\n {convergence_reason}")
-                print(
-                    f"  Final: OD viol={od_viol:.4f}, Link R²={metrics['link_r2']:.4f}, BPR gap={metrics['bpr_gap_pct']:.2f}%"
-                )
 
         # Determine if truly converged vs stopped early
         # Only consider it converged if OD violation < gamma and x2 nonnegativity < gamma
