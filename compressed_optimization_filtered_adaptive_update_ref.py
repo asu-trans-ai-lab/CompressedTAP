@@ -19,7 +19,6 @@ os.environ["OMP_NUM_THREADS"] = "1"
 os.environ["MKL_NUM_THREADS"] = "1"
 os.environ["OPENBLAS_NUM_THREADS"] = "1"
 
-import cvxpy as cp
 import numpy as np
 import pandas as pd
 from scipy.sparse import csr_matrix
@@ -669,13 +668,10 @@ class BertsekasALM:
             "x1_mae": [],
             "x2_r2": [],
             "x2_mae": [],
-            "x_weighted_r2": [],
-            "x_weighted_mae": [],
             "theta_r2": [],
             "theta_mae": [],
             "travel_time_r2": [],
             "travel_time_mae": [],
-            "travel_time_mape": [],
             "elapsed_time": [],
             "wall_elapsed_time": [],
             "inner_time": [],
@@ -1294,11 +1290,6 @@ class BertsekasALM:
         if self.r > 0 and len(self.x2_ref) > 0:
             x_ref_full[self.minor_mask] = self.x2_ref
 
-        x_weighted_mae = np.mean(np.abs(x_full - x_ref_full))
-        x_weighted_r2 = 1 - np.sum((x_full - x_ref_full) ** 2) / (
-            np.sum((x_ref_full - np.mean(x_ref_full)) ** 2) + 1e-10
-        )
-
         bpr_pure = bpr_objective(v, self.capacity, self.t_0, self.alpha, self.beta)
         bpr_gap = bpr_pure - self.bpr_optimal
         bpr_gap_pct = 100 * bpr_gap / self.bpr_optimal
@@ -1308,7 +1299,6 @@ class BertsekasALM:
         t_pred = self.t_0 * self.alpha * (v / self.capacity) ** self.beta
 
         travel_time_mae = np.mean(np.abs(t_pred - t_ref))
-        travel_time_mape = 100 * np.mean(np.abs((t_pred - t_ref) / (t_ref + 1e-10)))
         travel_time_r2 = 1 - np.sum((t_pred - t_ref) ** 2) / (
             np.sum((t_ref - np.mean(t_ref)) ** 2) + 1e-10
         )
@@ -1320,15 +1310,12 @@ class BertsekasALM:
             "x1_r2": x1_r2,
             "x2_mae": x2_mae,
             "x2_r2": x2_r2,
-            "x_weighted_mae": x_weighted_mae,
-            "x_weighted_r2": x_weighted_r2,
             "theta_mae": theta_mae,
             "theta_r2": theta_r2,
             "bpr_pure": bpr_pure,
             "bpr_gap": bpr_gap,
             "bpr_gap_pct": bpr_gap_pct,
             "travel_time_mae": travel_time_mae,
-            "travel_time_mape": travel_time_mape,
             "travel_time_r2": travel_time_r2,
         }
 
@@ -1464,13 +1451,10 @@ class BertsekasALM:
         self.history["x1_mae"].append(metrics["x1_mae"])
         self.history["x2_r2"].append(metrics["x2_r2"])
         self.history["x2_mae"].append(metrics["x2_mae"])
-        self.history["x_weighted_r2"].append(metrics["x_weighted_r2"])
-        self.history["x_weighted_mae"].append(metrics["x_weighted_mae"])
         self.history["theta_r2"].append(metrics["theta_r2"])
         self.history["theta_mae"].append(metrics["theta_mae"])
         self.history["travel_time_r2"].append(metrics["travel_time_r2"])
         self.history["travel_time_mae"].append(metrics["travel_time_mae"])
-        self.history["travel_time_mape"].append(metrics["travel_time_mape"])
         self.history["elapsed_time"].append(cpu_elapsed)
         self.history["wall_elapsed_time"].append(wall_elapsed)
         self.history["inner_time"].append(inner_cpu_time)
@@ -1793,7 +1777,7 @@ def setup_thresholds(x_ref, od_info=None, num_bins=11):
             must_be_major_set = set(must_be_major_indices)
             can_be_minor_indices = np.array([p for p in multi_path_indices if p not in must_be_major_set])
             
-            print(f"\nSTEP 0: Identify mandatory major paths")
+            print("\nSTEP 0: Identify mandatory major paths")
             print(f"  Paths that MUST be major (max flow per OD): {len(must_be_major_set)}")
             print(f"  Paths that CAN be minor: {len(can_be_minor_indices)}")
             
@@ -1806,13 +1790,13 @@ def setup_thresholds(x_ref, od_info=None, num_bins=11):
             max_minor_paths = len(multi_path_indices) - len(multi_path_ods)
             
             max_multi_flow = np.max(multi_path_flows)
-            print(f"\nMulti-path OD analysis:")
+            print("\nMulti-path OD analysis:")
             print(f"  # Multi-path ODs: {len(multi_path_ods)}")
             print(f"  # Paths in multi-path ODs: {len(multi_path_indices)}")
             print(f"  Flow range: [{np.min(multi_path_flows):.2f}, {max_multi_flow:.2f}]")
-            print(f"\nSTEP 1: Maximum number of minor paths")
-            print(f"  Each OD must have ≥1 major path")
-            print(f"  For OD with N paths: max N-1 minor paths")
+            print("\nSTEP 1: Maximum number of minor paths")
+            print("  Each OD must have ≥1 major path")
+            print("  For OD with N paths: max N-1 minor paths")
             print(f"  Total paths in multi-ODs: {len(multi_path_indices)}")
             print(f"  # Multi-path ODs: {len(multi_path_ods)}")
             print(f"  Max possible minor paths = {len(multi_path_indices)} - {len(multi_path_ods)} = {max_minor_paths}")
@@ -1977,7 +1961,6 @@ def run_threshold_sensitivity_analysis(
 
         # Optimize
         try:
-            gamma_ = gamma #if i == 0 else 1e-4  # Use smaller gamma for later run to ensure feasibility
             optimizer = BertsekasALM(
                 decomp,
                 svd_dict,
@@ -1988,7 +1971,7 @@ def run_threshold_sensitivity_analysis(
                 rho_od_init=1e3,
                 rho_nonneg_minor_init=1e3,
                 tau=4.0,
-                gamma=gamma_,
+                gamma=gamma,
             )
 
             opt_cpu_start = time.process_time()
@@ -2063,14 +2046,11 @@ def run_threshold_sensitivity_analysis(
                 "x1_mae": final_metrics["x1_mae"],
                 "x2_r2": final_metrics["x2_r2"],
                 "x2_mae": final_metrics["x2_mae"],
-                "x_weighted_r2": final_metrics["x_weighted_r2"],
-                "x_weighted_mae": final_metrics["x_weighted_mae"],
                 "theta_r2": final_metrics["theta_r2"],
                 "theta_mae": final_metrics["theta_mae"],
                 "travel_time_r2": final_metrics["travel_time_r2"],
                 "travel_time_mae": final_metrics["travel_time_mae"],
-                "travel_time_mape": final_metrics["travel_time_mape"],
-                "converged": (viol[0] < gamma_ and viol[1] < gamma_),
+                "converged": (viol[0] < gamma and viol[1] < gamma),
                 "convergence_reason": result["convergence_reason"],
             }
 
@@ -2103,7 +2083,6 @@ def print_link_volume_analysis(result, v_ref, capacity):
 
     print("  Link Volume Analysis:")
     print(f"    Max absolute error: {np.max(np.abs(v_diff)):.2f}")
-    print(f"    Max % error: {np.max(np.abs(v_pct_diff)):.2f}%")
     print(
         f"    # links with >10% error: {np.sum(np.abs(v_pct_diff) > 10)}/{len(v)}"
     )
@@ -2164,7 +2143,7 @@ def print_od_violation_analysis(optimizer, result, gamma):
             for i, idx in enumerate(worst_indices, 1):
                 print(f"      {i}. Path #{idx}: flow={x2[idx]:.7f}")
         else:
-            print(f"    All {n_minor} minor paths have non-negative flow ✓")
+            print(f"    All {n_minor} minor paths have non-negative flow")
     else:
         print("  Minor Path Non-negativity Details:")
         print("    No minor paths in this decomposition")
@@ -2173,7 +2152,6 @@ def print_od_violation_analysis(optimizer, result, gamma):
 def print_summary(summary):
     print("\n  Summary:")
     print(f"    Converged: {summary['converged']}")
-    print(f"    x_weighted R²: {summary['x_weighted_r2']:.6f}")
     print(
         f"    BPR: {summary['bpr_pure']:.4e} (Optimal: {summary['bpr_optimal']:.4e})"
     )
@@ -2184,7 +2162,7 @@ def print_summary(summary):
         f"    Link R²: {summary['link_r2']:.6f}, MAE: {summary['link_mae']:.2f}"
     )
     print(
-        f"    Travel Time R²: {summary['travel_time_r2']:.6f}, MAE: {summary['travel_time_mae']:.6f}, MAPE: {summary['travel_time_mape']:.2f}%"
+        f"    Travel Time R²: {summary['travel_time_r2']:.6f}, MAE: {summary['travel_time_mae']:.6f}"
     )
     print(
         f"    Time: SVD={summary['svd_time']:.3f}s (CPU), {summary['svd_wall_time']:.3f}s (Wall)"
