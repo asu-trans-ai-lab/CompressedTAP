@@ -6,8 +6,8 @@ Threshold Sensitivity Analysis for ALM with KKT Projection Gradient (FILTERED VE
 - FILTERED: d_multi excludes singleton ODs entirely (dimension reduction)
 
 GRADIENT FORMULA (Corrected):
-∇_{x1} L = B1^T ∇_v f_BPR + A1^T(λ_od + ρ_od·od_error) - max{0, λ_major - ρ_major·x1}
-∇_θ L = D^T ∇_v f_BPR + M^T(λ_od + ρ_od·od_error) - U_r^T max{0, λ_minor - ρ_minor·x2}
+∇_{y} L = B1^T ∇_v f_BPR + A1^T(λ_od + ρ_od·od_error) - max{0, λ_major - ρ_major·y}
+∇_θ L = D^T ∇_v f_BPR + M^T(λ_od + ρ_od·od_error) - U_r^T max{0, λ_minor - ρ_minor·w}
 
 Key change: Uses max{0, λ - ρ·x} instead of (λ + ρ·violation)·mask
 """
@@ -329,8 +329,8 @@ def decompose_paths(B, x_ref, od_info, threshold, add_singleton_category=True):
     B2 = B[minor_mask]
 
     x_singleton_ref = x_ref[singleton_mask]
-    x1_ref = x_ref[major_mask]
-    x2_ref = x_ref[minor_mask]
+    y_ref = x_ref[major_mask]
+    w_ref = x_ref[minor_mask]
 
     singleton_indices = np.where(singleton_mask)[0]
     major_indices = np.where(major_mask)[0]
@@ -389,8 +389,8 @@ def decompose_paths(B, x_ref, od_info, threshold, add_singleton_category=True):
         "B1": B1,
         "B2": B2,
         "x_singleton_ref": x_singleton_ref,
-        "x1_ref": x1_ref,
-        "x2_ref": x2_ref,
+        "y_ref": y_ref,
+        "w_ref": w_ref,
         "singleton_mask": singleton_mask,
         "major_mask": major_mask,
         "minor_mask": minor_mask,
@@ -414,7 +414,7 @@ def decompose_paths(B, x_ref, od_info, threshold, add_singleton_category=True):
 
 
 def compute_svd_compression(
-    B2, x2_ref, rank_pct=0.30, max_rank=50, use_truncated_svd=True
+    B2, w_ref, rank_pct=0.30, max_rank=50, use_truncated_svd=True
 ):
     """Compute SVD compression using TruncatedSVD for large sparse matrices"""
     n_minor, m = B2.shape
@@ -483,7 +483,7 @@ def compute_svd_compression(
 
         print("  Sparse SVD completed successfully")
 
-    theta_ref = U_r.T @ x2_ref
+    theta_ref = U_r.T @ w_ref
 
     svd_cpu_time = time.process_time() - svd_cpu_start
 
@@ -538,7 +538,7 @@ class ALM:
         self.B2 = decomp.get("B2", csr_matrix((n_minor, m_links), dtype=np.float64))
         self.A1 = decomp["A1"]
         self.A2 = decomp["A2"]
-        self.x2 = np.array([], dtype=np.float64)
+        self.w = np.array([], dtype=np.float64)
 
         # Handle singleton paths (paths from ODs with only 1 path)
         self.n_singleton = decomp.get("n_singleton", 0)
@@ -578,8 +578,8 @@ class ALM:
             self.r = svd_dict["r"]
             self.theta_ref = svd_dict["theta_ref"]
 
-        self.x1_ref = decomp["x1_ref"]
-        self.x2_ref = decomp["x2_ref"]
+        self.y_ref = decomp["y_ref"]
+        self.w_ref = decomp["w_ref"]
         self.v_ref = v_ref
 
         self.major_mask = decomp["major_mask"]
@@ -625,8 +625,10 @@ class ALM:
         self.alpha = alpha
         self.beta = beta
 
-        self.rho_od = rho_od_init
-        self.rho_nonneg_minor = rho_nonneg_minor_init
+        # penalty vector for OD conservation
+        self.c1 = rho_od_init
+        # penalty vector for minor path non-negativity
+        self.c2 = rho_nonneg_minor_init
         self.tau = tau
         self.gamma = gamma
         self.MAX_PENALTY = 1e20
@@ -636,10 +638,10 @@ class ALM:
         self.prev_minor_viol = None
 
         # Initialize Lagrangian multipliers
-        # λ_od for OD conservation constraints (dimension: k multi-path ODs)
+        # multipliers for OD conservation constraints (dimension: k multi-path ODs)
         self.lambda_od = np.zeros(self.k)
-        # λ_m for minor path non-negativity (Full KKT)
-        self.lambda_minor = np.zeros(decomp["n_minor"])
+        # multipliers for minor path non-negativity (Full KKT)
+        self.mu = np.zeros(decomp["n_minor"])
         self.bpr_optimal = bpr_objective(v_ref, capacity, t_0, alpha, beta)
 
         self.history = {
@@ -680,9 +682,9 @@ class ALM:
                 return True, convergence_reason
 
         # CONVERGENCE CHECK 3: Penalty maxed out (structural infeasibility)
-        if self.rho_od >= self.MAX_PENALTY:
+        if self.c1 >= self.MAX_PENALTY:
             convergence_reason = (
-                f"Penalty maxed (ρ={self.rho_od:.0e}), OD violation is structural"
+                f"Penalty maxed (ρ={self.c1:.0e}), OD violation is structural"
             )
             return True, convergence_reason
 
@@ -693,40 +695,40 @@ class ALM:
 
         return False, None
 
-    def compute_metrics(self, x1, v):
+    def compute_metrics(self, y, v):
         """Compute comprehensive metrics"""
         # Handle minor path metrics (only if minor paths exist)
         if self.r > 0:
-            x2_mae = np.mean(np.abs(self.x2 - self.x2_ref))
-            x2_r2 = 1 - np.sum((self.x2 - self.x2_ref) ** 2) / (
-                np.sum((self.x2_ref - np.mean(self.x2_ref)) ** 2) + 1e-10
+            w_mae = np.mean(np.abs(self.w - self.w_ref))
+            w_r2 = 1 - np.sum((self.w - self.w_ref) ** 2) / (
+                np.sum((self.w_ref - np.mean(self.w_ref)) ** 2) + 1e-10
             )
         else:
             # No minor paths - set appropriate values
-            self.x2 = np.array([], dtype=np.float64)
-            x2_mae = 0.0
-            x2_r2 = 1.0  # Perfect fit when no minor paths to predict
+            self.w = np.array([], dtype=np.float64)
+            w_mae = 0.0
+            w_r2 = 1.0  # Perfect fit when no minor paths to predict
 
         link_mae = np.mean(np.abs(v - self.v_ref))
         link_r2 = 1 - np.sum((v - self.v_ref) ** 2) / (
             np.sum((self.v_ref - np.mean(self.v_ref)) ** 2) + 1e-10
         )
 
-        x1_mae = np.mean(np.abs(x1 - self.x1_ref))
-        x1_r2 = 1 - np.sum((x1 - self.x1_ref) ** 2) / (
-            np.sum((self.x1_ref - np.mean(self.x1_ref)) ** 2) + 1e-10
+        y_mae = np.mean(np.abs(y - self.y_ref))
+        y_r2 = 1 - np.sum((y - self.y_ref) ** 2) / (
+            np.sum((self.y_ref - np.mean(self.y_ref)) ** 2) + 1e-10
         )
 
         # Weighted combined metrics
         x_full = np.zeros(len(self.major_mask))
-        x_full[self.major_mask] = x1
-        if self.r > 0 and len(self.x2) > 0:
-            x_full[self.minor_mask] = self.x2
+        x_full[self.major_mask] = y
+        if self.r > 0 and len(self.w) > 0:
+            x_full[self.minor_mask] = self.w
 
         x_ref_full = np.zeros(len(self.major_mask))
-        x_ref_full[self.major_mask] = self.x1_ref
-        if self.r > 0 and len(self.x2_ref) > 0:
-            x_ref_full[self.minor_mask] = self.x2_ref
+        x_ref_full[self.major_mask] = self.y_ref
+        if self.r > 0 and len(self.w_ref) > 0:
+            x_ref_full[self.minor_mask] = self.w_ref
 
         bpr_pure = bpr_objective(v, self.capacity, self.t_0, self.alpha, self.beta)
         bpr_gap = bpr_pure - self.bpr_optimal
@@ -744,10 +746,10 @@ class ALM:
         return {
             "link_mae": link_mae,
             "link_r2": link_r2,
-            "x1_mae": x1_mae,
-            "x1_r2": x1_r2,
-            "x2_mae": x2_mae,
-            "x2_r2": x2_r2,
+            "y_mae": y_mae,
+            "y_r2": y_r2,
+            "w_mae": w_mae,
+            "w_r2": w_r2,
             "bpr_pure": bpr_pure,
             "bpr_gap": bpr_gap,
             "bpr_gap_pct": bpr_gap_pct,
@@ -755,43 +757,43 @@ class ALM:
             "travel_time_r2": travel_time_r2,
         }
 
-    def compute_violations(self, x1, theta):
+    def compute_violations(self, y, z):
         """Compute constraint violations for equality constraints
 
         Returns:
             od_violation: Maximum OD conservation violation
             nonneg_minor_violation: Maximum minor path non-negativity violation
-            u: Cached minor path flows (U_r @ theta), or None if no minor paths
+            u: Cached minor path flows (U_r @ z), or None if no minor paths
             od_flow: Cached OD flows for reuse
         """
         # Handle OD flow computation
         if self.r > 0:
-            u = self.U_r @ theta
-            od_flow = self.A1 @ x1 + self.A2 @ u
+            u = self.U_r @ z
+            od_flow = self.A1 @ y + self.A2 @ u
         else:
             u = None
-            od_flow = self.A1 @ x1  # Only major paths when no minor paths
+            od_flow = self.A1 @ y  # Only major paths when no minor paths
 
         # Equality constraint violation: |od_flow - d_multi|
         od_violation = np.max(np.abs(od_flow - self.d_multi))
 
         # Handle minor path violations (only if minor paths exist and enabled)
         if self.r > 0:
-            self.x2 = u
+            self.w = u
             nonneg_minor_violation = np.max(-np.minimum(u, 0))
         else:
             nonneg_minor_violation = 0.0  # No minor paths = no violation
 
         return od_violation, nonneg_minor_violation, u, od_flow
 
-    def get_od_violation_details(self, x1, theta, gamma):
+    def get_od_violation_details(self, y, z, gamma):
         """Get detailed OD violation information for all OD pairs"""
         # Handle OD flow computation
         if self.r > 0:
-            u = self.U_r @ theta
-            od_flow = self.A1 @ x1 + self.A2 @ u
+            u = self.U_r @ z
+            od_flow = self.A1 @ y + self.A2 @ u
         else:
-            od_flow = self.A1 @ x1
+            od_flow = self.A1 @ y
 
         # Use d_multi for error calculation (multi-path ODs only)
         od_errors = np.abs(od_flow - self.d_multi)
@@ -858,7 +860,7 @@ class ALM:
         if enable_warm_start:
             # warm start
             print("  Using warm start (0.0) for optimization")
-            x1 = np.copy(self.x1_ref)
+            y = np.copy(self.y_ref)
         else:
             if enable_proportional_cold_start:
                 # cold start: proportional distribution of demand across paths
@@ -879,70 +881,70 @@ class ALM:
                     self.d_multi[nonzero_paths] / paths_per_od[nonzero_paths]
                 )
 
-                # Broadcast to all paths: x1 = A1.T @ flow_per_path_by_od
+                # Broadcast to all paths: y = A1.T @ flow_per_path_by_od
                 # This automatically distributes the flow to the right paths
-                x1 = self.A1.T @ flow_per_path_by_od  # (s,)
-                if hasattr(x1, "toarray"):
-                    x1 = x1.toarray().flatten()
+                y = self.A1.T @ flow_per_path_by_od  # (s,)
+                if hasattr(y, "toarray"):
+                    y = y.toarray().flatten()
 
                 # Add small noise to break symmetry
-                x1 += np.random.uniform(0, 0.01, size=self.s)
+                y += np.random.uniform(0, 0.01, size=self.s)
             else:
                 print(f"  Using cold start for optimization (0.0, {self.k} OD pairs)")
-                x1 = np.zeros(self.s)
+                y = np.zeros(self.s)
 
-        # Handle theta initialization (only if minor paths exist)
+        # Handle z initialization (only if minor paths exist)
         if self.r > 0:
-            theta = np.zeros(self.r)
-            z = np.concatenate([x1, theta])
+            z = np.zeros(self.r)
+            x = np.concatenate([y, z])
             bounds = [(0, None)] * self.s + [(None, None)] * self.r
         else:
-            theta = np.array([], dtype=np.float64)
-            z = x1  # Only x1 when no minor paths
-            bounds = [(0, None)] * self.s  # Only bounds for x1
+            z = np.array([], dtype=np.float64)
+            x = y  # Only y when no minor paths
+            bounds = [(0, None)] * self.s  # Only bounds for y
 
-        return z, x1, theta, bounds
+        return x, y, z, bounds
 
-    def objective_and_gradient_chain_rule(self, z):
+    def objective_and_gradient_chain_rule(self, x):
         """Compute augmented Lagrangian objective with multipliers and penalties"""
-        x1 = z[: self.s]
-        theta = z[self.s :] if self.r > 0 else np.array([], dtype=np.float64)
+        y = x[: self.s]
+        z = x[self.s :] if self.r > 0 else np.array([], dtype=np.float64)
 
-        # Compute link volumes: v = v_singleton + B1^T x1 + D θ
+        # Compute link volumes: v = v_singleton + B1^T y + D θ
         # v_singleton is a constant (pre-computed in __init__)
         if self.v_singleton is not None:
-            v = self.v_singleton + self.B1.T @ x1
+            v = self.v_singleton + self.B1.T @ y
         else:
-            v = self.B1.T @ x1
+            v = self.B1.T @ y
 
         if self.r > 0:
             # minor path contribution computed via chain multiplications
-            u = self.U_r @ theta
+            u = self.U_r @ z
             v += self.B2.T.dot(u)
 
         # BPR objective (v includes constant v_singleton contribution)
         f_bpr = bpr_objective(v, self.capacity, self.t_0, self.alpha, self.beta)
 
-        # OD conservation: A1*x1 + A2*(U_r@theta) = d_multi (only multi-path ODs)
+        # OD conservation: A1*y + A2*(U_r@z) = d_multi (only multi-path ODs)
         # Singleton ODs excluded - their conservation is satisfied by construction
         if self.r > 0:
-            od_flow = self.A1 @ x1 + self.A2 @ u
+            od_flow = self.A1 @ y + self.A2 @ u
         else:
-            od_flow = self.A1 @ x1
+            od_flow = self.A1 @ y
         od_error = od_flow - self.d_multi
 
         # ALM terms for OD constraints: λ^T * g + ρ/2 * ||g||²
         od_lagrangian = self.lambda_od.T @ od_error
-        od_penalty = 0.5 * self.rho_od * np.sum(od_error**2)
+        od_penalty = 0.5 * self.c1 * np.sum(od_error**2)
 
         # Non-negativity constraints for minor paths: U_r*θ ≥ 0 (only if minor paths exist)
         # Formula (14): (1/2c) * {(max{0, γ - c·[U_r θ]})² - γ²}
         if self.r > 0:
             max_term_minor = np.maximum(
-                0, self.lambda_minor - self.rho_nonneg_minor * u
+                0, self.mu - self.c2 * u
             )
-            minor_penalty_term = (1.0 / (2.0 * self.rho_nonneg_minor)) * (
-                np.sum(max_term_minor**2) - np.sum(self.lambda_minor**2)
+            minor_penalty_term = (1.0 / (2.0 * self.c2)) * (
+                np.sum(max_term_minor**2) - np.sum(self.mu**2)
             )
         else:
             minor_penalty_term = 0.0
@@ -952,71 +954,71 @@ class ALM:
 
         # Gradients
         # Note: grad_v computed from v (which includes v_singleton)
-        # But ∂v_singleton/∂x1 = 0 and ∂v_singleton/∂θ = 0 (constant doesn't affect gradients)
+        # But ∂v_singleton/∂y = 0 and ∂v_singleton/∂θ = 0 (constant doesn't affect gradients)
         grad_v = bpr_gradient(v, self.capacity, self.t_0, self.alpha, self.beta)
 
-        # Gradient w.r.t. x1: ∂f/∂x1 = B1 @ grad_v + A1^T @ (λ + ρ*error)
-        grad_x1 = self.B1 @ grad_v
-        grad_x1 += self.A1.T @ (self.lambda_od + self.rho_od * od_error)
+        # Gradient w.r.t. y: ∂f/∂y = B1 @ grad_v + A1^T @ (λ + ρ*error)
+        grad_y = self.B1 @ grad_v
+        grad_y += self.A1.T @ (self.lambda_od + self.c1 * od_error)
 
         # Gradient w.r.t. θ (CORRECTED KKT PROJECTION FORMULA, only if minor paths exist)
         if self.r > 0:
             # tmp = B2 @ grad_v  +  A2.T @ (lambda_od + rho_od * od_error)
             tmp = self.B2 @ grad_v
-            tmp += self.A2.T @ (self.lambda_od + self.rho_od * od_error)
-            # map back to theta space
-            grad_theta = self.U_r.T @ tmp
-            # KKT projection gradient: -U_r^T max{0, λ_minor - ρ_minor·x2}
-            grad_theta -= self.U_r.T @ np.maximum(
-                0, self.lambda_minor - self.rho_nonneg_minor * u
+            tmp += self.A2.T @ (self.lambda_od + self.c1 * od_error)
+            # map back to z space
+            grad_z = self.U_r.T @ tmp
+            # KKT projection gradient: -U_r^T max{0, λ_minor - ρ_minor·w}
+            grad_z -= self.U_r.T @ np.maximum(
+                0, self.mu - self.c2 * u
             )
             # Combine gradients
-            grad = np.concatenate([grad_x1, grad_theta])
+            grad = np.concatenate([grad_y, grad_z])
         else:
-            grad = grad_x1
+            grad = grad_y
 
         return total_obj, grad
 
-    def objective_and_gradient_direct(self, z):
+    def objective_and_gradient_direct(self, x):
         """Compute augmented Lagrangian using direct M matrix multiplication
 
         This version explicitly computes M*θ for OD flow calculation.
         Useful when M is sparse and direct multiplication is efficient.
         """
-        x1 = z[: self.s]
-        theta = z[self.s :] if self.r > 0 else np.array([], dtype=np.float64)
+        y = x[: self.s]
+        z = x[self.s :] if self.r > 0 else np.array([], dtype=np.float64)
 
         # Compute link volumes
         if self.v_singleton is not None:
-            v = self.v_singleton + self.B1.T @ x1
+            v = self.v_singleton + self.B1.T @ y
         else:
-            v = self.B1.T @ x1
+            v = self.B1.T @ y
 
         if self.r > 0:
-            u = self.U_r @ theta
-            v += self.D @ theta
+            u = self.U_r @ z
+            v += self.D @ z
 
         # BPR objective
         f_bpr = bpr_objective(v, self.capacity, self.t_0, self.alpha, self.beta)
 
-        # OD conservation using direct M multiplication: A1*x1 + M*θ = d_multi
+        # OD conservation using direct M multiplication: A1*y + M*θ = d_multi
         if self.r > 0:
-            od_flow = self.A1 @ x1 + self.M @ theta
+            od_flow = self.A1 @ y + self.M @ z
         else:
-            od_flow = self.A1 @ x1
+            od_flow = self.A1 @ y
         od_error = od_flow - self.d_multi
 
         # ALM terms for OD constraints
         od_lagrangian = self.lambda_od.T @ od_error
-        od_penalty = 0.5 * self.rho_od * np.sum(od_error**2)
+        od_penalty = 0.5 * self.c1 * np.sum(od_error**2)
 
         # Non-negativity constraints for minor paths
         if self.r > 0:
             max_term_minor = np.maximum(
-                0, self.lambda_minor - self.rho_nonneg_minor * u
+                0, self.mu - self.c2 * u
             )
-            minor_penalty_term = (1.0 / (2.0 * self.rho_nonneg_minor)) * (
-                np.sum(max_term_minor**2) - np.sum(self.lambda_minor**2)
+            minor_penalty_term = (1.0 / (2.0 * self.c2)) * (
+                np.sum(max_term_minor**2) - np.sum(self.mu**2)
             )
         else:
             minor_penalty_term = 0.0
@@ -1027,71 +1029,71 @@ class ALM:
         # Gradients
         grad_v = bpr_gradient(v, self.capacity, self.t_0, self.alpha, self.beta)
 
-        # Gradient w.r.t. x1
-        grad_x1 = self.B1 @ grad_v
-        grad_x1 += self.A1.T @ (self.lambda_od + self.rho_od * od_error)
+        # Gradient w.r.t. y
+        grad_y = self.B1 @ grad_v
+        grad_y += self.A1.T @ (self.lambda_od + self.c1 * od_error)
 
         # Gradient w.r.t. θ using direct M^T multiplication
         if self.r > 0:
             # BPR gradient contribution: D^T @ grad_v
-            grad_theta = self.D.T @ grad_v
+            grad_z = self.D.T @ grad_v
             # OD constraint gradient using direct M^T: M^T @ (λ + ρ*error)
-            grad_theta += self.M.T @ (self.lambda_od + self.rho_od * od_error)
+            grad_z += self.M.T @ (self.lambda_od + self.c1 * od_error)
             # KKT projection for non-negativity
-            grad_theta -= self.U_r.T @ np.maximum(
-                0, self.lambda_minor - self.rho_nonneg_minor * u
+            grad_z -= self.U_r.T @ np.maximum(
+                0, self.mu - self.c2 * u
             )
-            grad = np.concatenate([grad_x1, grad_theta])
+            grad = np.concatenate([grad_y, grad_z])
         else:
-            grad = grad_x1
+            grad = grad_y
 
         return total_obj, grad
 
-    def objective_and_gradient_direct_enhanced(self, z):
+    def objective_and_gradient_direct_enhanced(self, x):
         """Direct objective/gradient with minor allocation reductions.
 
         Improvements vs objective_and_gradient_direct:
-        1. Reuse `dual_od = lambda_od + rho_od * od_error` in both x1/theta gradients.
+        1. Reuse `dual_od = lambda_od + rho_od * od_error` in both y/z gradients.
         2. Reuse `max_term_minor` in both objective penalty and KKT projection gradient.
         """
-        x1 = z[: self.s]
-        theta = z[self.s :] if self.r > 0 else np.array([], dtype=np.float64)
+        y = x[: self.s]
+        z = x[self.s :] if self.r > 0 else np.array([], dtype=np.float64)
 
         # Compute link volumes
         if self.v_singleton is not None:
-            v = self.v_singleton + self.B1.T @ x1
+            v = self.v_singleton + self.B1.T @ y
         else:
-            v = self.B1.T @ x1
+            v = self.B1.T @ y
 
         if self.r > 0:
-            u = self.U_r @ theta
-            v += self.D @ theta
+            u = self.U_r @ z
+            v += self.D @ z
 
         # BPR objective
         f_bpr = bpr_objective(v, self.capacity, self.t_0, self.alpha, self.beta)
 
-        # OD conservation using direct M multiplication: A1*x1 + M*θ = d_multi
+        # OD conservation using direct M multiplication: A1*y + M*θ = d_multi
         if self.r > 0:
-            od_flow = self.A1 @ x1 + self.M @ theta
+            od_flow = self.A1 @ y + self.M @ z
         else:
-            od_flow = self.A1 @ x1
+            od_flow = self.A1 @ y
         od_error = od_flow - self.d_multi
 
         # ALM terms for OD constraints
         od_lagrangian = self.lambda_od.T @ od_error
-        od_penalty = 0.5 * self.rho_od * np.sum(od_error**2)
+        od_penalty = 0.5 * self.c1 * np.sum(od_error**2)
 
-        # Reuse this vector in both x1/theta gradients
-        dual_od = self.lambda_od + self.rho_od * od_error
+        # Reuse this vector in both y/z gradients
+        dual_od = self.lambda_od + self.c1 * od_error
 
         # Non-negativity constraints for minor paths
         if self.r > 0:
             # Reuse this vector in both objective penalty and KKT projection gradient
             max_term_minor = np.maximum(
-                0, self.lambda_minor - self.rho_nonneg_minor * u
+                0, self.mu - self.c2 * u
             )
-            minor_penalty_term = (1.0 / (2.0 * self.rho_nonneg_minor)) * (
-                np.sum(max_term_minor**2) - np.sum(self.lambda_minor**2)
+            minor_penalty_term = (1.0 / (2.0 * self.c2)) * (
+                np.sum(max_term_minor**2) - np.sum(self.mu**2)
             )
         else:
             max_term_minor = None
@@ -1103,26 +1105,26 @@ class ALM:
         # Gradients
         grad_v = bpr_gradient(v, self.capacity, self.t_0, self.alpha, self.beta)
 
-        # Gradient w.r.t. x1
-        grad_x1 = self.B1 @ grad_v
-        grad_x1 += self.A1.T @ dual_od
+        # Gradient w.r.t. y
+        grad_y = self.B1 @ grad_v
+        grad_y += self.A1.T @ dual_od
 
         # Gradient w.r.t. θ using direct M^T multiplication
         if self.r > 0:
             # BPR gradient contribution: D^T @ grad_v
-            grad_theta = self.D.T @ grad_v
+            grad_z = self.D.T @ grad_v
             # OD constraint gradient using direct M^T: M^T @ (λ + ρ*error)
-            grad_theta += self.M.T @ dual_od
+            grad_z += self.M.T @ dual_od
             # KKT projection for non-negativity (reuse max_term_minor)
-            grad_theta -= self.U_r.T @ max_term_minor
-            grad = np.concatenate([grad_x1, grad_theta])
+            grad_z -= self.U_r.T @ max_term_minor
+            grad = np.concatenate([grad_y, grad_z])
         else:
-            grad = grad_x1
+            grad = grad_y
 
         return total_obj, grad
 
-    def objective_and_gradient_factored(self, z):
-        """Compute augmented Lagrangian using factored form V_r @ (sigma * theta) - SPARSE FRIENDLY
+    def objective_and_gradient_factored(self, x):
+        """Compute augmented Lagrangian using factored form V_r @ (sigma * z) - SPARSE FRIENDLY
 
         The factored form precomputes the expensive B2.T @ U_r once during setup
 
@@ -1148,7 +1150,7 @@ class ALM:
             B2^T @ U_r = V_r @ Sigma @ I_r              [orthonormality]
             B2^T @ U_r = V_r @ Sigma                    [QED]
 
-        Therefore: B2^T @ U_r @ theta = V_r @ Sigma @ theta = V_r @ (sigma * theta)
+        Therefore: B2^T @ U_r @ z = V_r @ Sigma @ z = V_r @ (sigma * z)
 
         Similarly for gradient: (B2^T @ U_r)^T = Sigma^T @ V_r^T = Sigma @ V_r^T
         So: U_r^T @ B2 @ grad_v = sigma * (V_r^T @ grad_v)
@@ -1158,51 +1160,51 @@ class ALM:
         The factored form exploits the SVD relationship: B2.T @ U_r = V_r @ diag(sigma)
 
         Chain rule method (objective_and_gradient):
-            v += B2.T @ (U_r @ theta)
-            grad_theta += U_r.T @ (B2 @ grad_v)
+            v += B2.T @ (U_r @ z)
+            grad_z += U_r.T @ (B2 @ grad_v)
 
         Factored method (this function):
-            v += V_r @ (sigma * theta)
-            grad_theta += sigma * (V_r.T @ grad_v)
+            v += V_r @ (sigma * z)
+            grad_z += sigma * (V_r.T @ grad_v)
         """
-        x1 = z[: self.s]
-        theta = z[self.s :] if self.r > 0 else np.array([], dtype=np.float64)
+        y = x[: self.s]
+        z = x[self.s :] if self.r > 0 else np.array([], dtype=np.float64)
 
-        # Compute link volumes: v = v_singleton + B1^T x1 + V_r @ (sigma * theta)
+        # Compute link volumes: v = v_singleton + B1^T y + V_r @ (sigma * z)
         if self.v_singleton is not None:
-            v = self.v_singleton + self.B1.T @ x1
+            v = self.v_singleton + self.B1.T @ y
         else:
-            v = self.B1.T @ x1
+            v = self.B1.T @ y
 
         if self.r > 0:
-            # Factored form: V_r @ (sigma * theta) instead of chain rule
+            # Factored form: V_r @ (sigma * z) instead of chain rule
             # Preserves sparsity of V_r (critical for column_subset/random_projection)
-            theta_scaled = self.sigma * theta  # Element-wise: O(r)
+            theta_scaled = self.sigma * z  # Element-wise: O(r)
             v += self.V_r @ theta_scaled  # Sparse matrix-vector: O(nnz(V_r))
             # Still need u for non-negativity constraint
-            u = self.U_r @ theta
+            u = self.U_r @ z
 
         # BPR objective
         f_bpr = bpr_objective(v, self.capacity, self.t_0, self.alpha, self.beta)
 
-        # OD conservation: A1*x1 + M*θ = d_multi (using precomputed M)
+        # OD conservation: A1*y + M*θ = d_multi (using precomputed M)
         if self.r > 0:
-            od_flow = self.A1 @ x1 + self.M @ theta
+            od_flow = self.A1 @ y + self.M @ z
         else:
-            od_flow = self.A1 @ x1
+            od_flow = self.A1 @ y
         od_error = od_flow - self.d_multi
 
         # ALM terms for OD constraints
         od_lagrangian = self.lambda_od.T @ od_error
-        od_penalty = 0.5 * self.rho_od * np.sum(od_error**2)
+        od_penalty = 0.5 * self.c1 * np.sum(od_error**2)
 
         # Non-negativity constraints for minor paths
         if self.r > 0:
             max_term_minor = np.maximum(
-                0, self.lambda_minor - self.rho_nonneg_minor * u
+                0, self.mu - self.c2 * u
             )
-            minor_penalty_term = (1.0 / (2.0 * self.rho_nonneg_minor)) * (
-                np.sum(max_term_minor**2) - np.sum(self.lambda_minor**2)
+            minor_penalty_term = (1.0 / (2.0 * self.c2)) * (
+                np.sum(max_term_minor**2) - np.sum(self.mu**2)
             )
         else:
             minor_penalty_term = 0.0
@@ -1213,36 +1215,36 @@ class ALM:
         # Gradients
         grad_v = bpr_gradient(v, self.capacity, self.t_0, self.alpha, self.beta)
 
-        # Gradient w.r.t. x1
-        grad_x1 = self.B1 @ grad_v
-        grad_x1 += self.A1.T @ (self.lambda_od + self.rho_od * od_error)
+        # Gradient w.r.t. y
+        grad_y = self.B1 @ grad_v
+        grad_y += self.A1.T @ (self.lambda_od + self.c1 * od_error)
 
         # Gradient w.r.t. θ (using factored form)
         if self.r > 0:
             # BPR gradient: factored form diag(sigma) @ V_r^T @ grad_v
             # Element-wise scaling after sparse op
-            grad_theta = self.sigma * (self.V_r.T @ grad_v)
+            grad_z = self.sigma * (self.V_r.T @ grad_v)
             # OD constraint: M^T @ (λ + ρ*error)
-            grad_theta += self.M.T @ (self.lambda_od + self.rho_od * od_error)
+            grad_z += self.M.T @ (self.lambda_od + self.c1 * od_error)
             # KKT projection for non-negativity
-            grad_theta -= self.U_r.T @ np.maximum(
-                0, self.lambda_minor - self.rho_nonneg_minor * u
+            grad_z -= self.U_r.T @ np.maximum(
+                0, self.mu - self.c2 * u
             )
-            grad = np.concatenate([grad_x1, grad_theta])
+            grad = np.concatenate([grad_y, grad_z])
         else:
-            grad = grad_x1
+            grad = grad_y
 
         return total_obj, grad
 
-    def objective_and_gradient_mixed(self, z):
+    def objective_and_gradient_mixed(self, x):
         """Compute augmented Lagrangian using MIXED approach
 
         This function combines:
-        1. Factored form for LINK VOLUMES: v += V_r @ (sigma * theta)
+        1. Factored form for LINK VOLUMES: v += V_r @ (sigma * z)
            - Exploits sparsity in V_r for BPR computation
            - Fast for sparse compression methods
 
-        2. Chain rule for OD FLOW: od_flow = A1*x1 + A2*(U_r@theta)
+        2. Chain rule for OD FLOW: od_flow = A1*y + A2*(U_r@z)
            - Uses chain multiplication through U_r
            - Avoids storing M matrix explicitly
 
@@ -1259,21 +1261,21 @@ class ALM:
         - When M = A2 @ U_r would be dense but V_r is sparse
         - Balance between speed (factored BPR) and memory (chain OD)
         """
-        x1 = z[: self.s]
-        theta = z[self.s :] if self.r > 0 else np.array([], dtype=np.float64)
+        y = x[: self.s]
+        z = x[self.s :] if self.r > 0 else np.array([], dtype=np.float64)
 
         # Compute link volumes using FACTORED FORM (sparse-friendly)
         if self.v_singleton is not None:
-            v = self.v_singleton + self.B1.T @ x1
+            v = self.v_singleton + self.B1.T @ y
         else:
-            v = self.B1.T @ x1
+            v = self.B1.T @ y
 
         if self.r > 0:
-            # Factored form: V_r @ (sigma * theta) - exploits V_r sparsity
-            theta_scaled = self.sigma * theta
+            # Factored form: V_r @ (sigma * z) - exploits V_r sparsity
+            theta_scaled = self.sigma * z
             v += self.V_r @ theta_scaled
             # Compute u for OD flow and non-negativity constraint
-            u = self.U_r @ theta
+            u = self.U_r @ z
 
         # BPR objective
         f_bpr = bpr_objective(v, self.capacity, self.t_0, self.alpha, self.beta)
@@ -1281,24 +1283,24 @@ class ALM:
         # OD conservation using CHAIN RULE (memory efficient)
         if self.r > 0:
             # use chain rule
-            od_flow = self.A1 @ x1 + self.A2 @ u  # A2 @ (U_r @ theta)
+            od_flow = self.A1 @ y + self.A2 @ u  # A2 @ (U_r @ z)
             # use precomputed M = A2 @ U_r
-            # od_flow = self.A1 @ x1 + self.M @ theta
+            # od_flow = self.A1 @ y + self.M @ z
         else:
-            od_flow = self.A1 @ x1
+            od_flow = self.A1 @ y
         od_error = od_flow - self.d_multi
 
         # ALM terms for OD constraints
         od_lagrangian = self.lambda_od.T @ od_error
-        od_penalty = 0.5 * self.rho_od * np.sum(od_error**2)
+        od_penalty = 0.5 * self.c1 * np.sum(od_error**2)
 
         # Non-negativity constraints for minor paths
         if self.r > 0:
             max_term_minor = np.maximum(
-                0, self.lambda_minor - self.rho_nonneg_minor * u
+                0, self.mu - self.c2 * u
             )
-            minor_penalty_term = (1.0 / (2.0 * self.rho_nonneg_minor)) * (
-                np.sum(max_term_minor**2) - np.sum(self.lambda_minor**2)
+            minor_penalty_term = (1.0 / (2.0 * self.c2)) * (
+                np.sum(max_term_minor**2) - np.sum(self.mu**2)
             )
         else:
             minor_penalty_term = 0.0
@@ -1309,25 +1311,25 @@ class ALM:
         # Gradients
         grad_v = bpr_gradient(v, self.capacity, self.t_0, self.alpha, self.beta)
 
-        # Gradient w.r.t. x1
-        grad_x1 = self.B1 @ grad_v
-        grad_x1 += self.A1.T @ (self.lambda_od + self.rho_od * od_error)
+        # Gradient w.r.t. y
+        grad_y = self.B1 @ grad_v
+        grad_y += self.A1.T @ (self.lambda_od + self.c1 * od_error)
 
-        # Gradient w.r.t. θ using MIXED approach
+        # Gradient w.r.t. z using MIXED approach
         if self.r > 0:
             # BPR gradient: FACTORED form (sparse-friendly)
-            grad_theta = self.sigma * (self.V_r.T @ grad_v)
+            grad_z = self.sigma * (self.V_r.T @ grad_v)
             # OD constraint: CHAIN RULE form (memory efficient)
-            grad_theta += self.U_r.T @ (
-                self.A2.T @ (self.lambda_od + self.rho_od * od_error)
+            grad_z += self.U_r.T @ (
+                self.A2.T @ (self.lambda_od + self.c1 * od_error)
             )
             # KKT projection for non-negativity
-            grad_theta -= self.U_r.T @ np.maximum(
-                0, self.lambda_minor - self.rho_nonneg_minor * u
+            grad_z -= self.U_r.T @ np.maximum(
+                0, self.mu - self.c2 * u
             )
-            grad = np.concatenate([grad_x1, grad_theta])
+            grad = np.concatenate([grad_y, grad_z])
         else:
-            grad = grad_x1
+            grad = grad_y
 
         return total_obj, grad
 
@@ -1340,7 +1342,7 @@ class ALM:
         verbose=True,
     ):
         """Run Augmented Lagrangian Method (KKT projection + stagnation detection)"""
-        z, x1, theta, bounds = self.initialize_solution(
+        x, y, z, bounds = self.initialize_solution(
             enable_warm_start=False, enable_proportional_cold_start=True
         )
 
@@ -1358,13 +1360,13 @@ class ALM:
             outer_cpu_start = time.process_time()
 
             # Store initial penalty values
-            initial_rho_od = self.rho_od
-            initial_rho_nonneg_minor = self.rho_nonneg_minor
+            initial_c1 = self.c1
+            initial_c2 = self.c2
 
             inner_cpu_start = time.process_time()
             result = minimize(
-                fun=lambda z_: self.objective_and_gradient_mixed(z_),
-                x0=z,
+                fun=lambda x_: self.objective_and_gradient_mixed(x_),
+                x0=x,
                 method="L-BFGS-B",
                 jac=True,
                 bounds=bounds,
@@ -1372,13 +1374,13 @@ class ALM:
             )
             inner_cpu_time = time.process_time() - inner_cpu_start
 
-            z = result.x
-            x1 = z[: self.s]
-            theta = z[self.s :] if self.r > 0 else np.array([], dtype=np.float64)
+            x = result.x
+            y = x[: self.s]
+            z = x[self.s :] if self.r > 0 else np.array([], dtype=np.float64)
 
             # Check convergence and cache intermediate computations
             od_viol, minor_viol, u_cached, od_flow_cached = self.compute_violations(
-                x1, theta
+                y, z
             )
             has_converged, convergence_reason = self.check_convergence(
                 od_viol,
@@ -1392,23 +1394,23 @@ class ALM:
             if not has_converged:
                 # Reuse cached values to avoid redundant computations
                 self.update_multipliers(
-                    x1, theta, u_cached=u_cached, od_flow_cached=od_flow_cached
+                    y, z, u_cached=u_cached, od_flow_cached=od_flow_cached
                 )
                 self.update_penalties(od_viol, minor_viol, eta=0.25)
 
             outer_cpu_time = time.process_time() - outer_cpu_start
 
-            # Compute link volumes using cached u to avoid recomputing U_r @ theta
+            # Compute link volumes using cached u to avoid recomputing U_r @ z
             if self.v_singleton is not None:
-                v = self.v_singleton + self.B1.T @ x1
+                v = self.v_singleton + self.B1.T @ y
             else:
-                v = self.B1.T @ x1
+                v = self.B1.T @ y
 
             if self.r > 0:
-                # Reuse cached u instead of recomputing U_r @ theta
+                # Reuse cached u instead of recomputing U_r @ z
                 v += self.B2.T.dot(u_cached)
 
-            metrics = self.compute_metrics(x1, v)
+            metrics = self.compute_metrics(y, v)
             self.update_history(result, metrics, od_viol)
 
             if verbose:
@@ -1420,21 +1422,21 @@ class ALM:
                     minor_viol,
                     inner_time=inner_cpu_time,
                     outer_time=outer_cpu_time,
-                    initial_rho_od=initial_rho_od,
-                    initial_rho_nonneg_minor=initial_rho_nonneg_minor,
+                    initial_c1=initial_c1,
+                    initial_c2=initial_c2,
                 )
 
             if has_converged:
                 break
 
         # Determine if truly converged vs stopped early
-        # Only consider it converged if OD violation < gamma and x2 nonnegativity < gamma
+        # Only consider it converged if OD violation < gamma and w nonnegativity < gamma
         truly_converged = od_viol < self.gamma and minor_viol < self.gamma
 
         return {
-            "x1": x1,
-            "theta": theta,
-            "x2": self.x2,
+            "y": y,
+            "z": z,
+            "w": self.w,
             "v": v,
             "success": result.success,
             "converged": truly_converged,
@@ -1446,13 +1448,13 @@ class ALM:
             "final_violations": (od_viol, minor_viol),
         }
 
-    def update_multipliers(self, x1, theta, u_cached=None, od_flow_cached=None):
+    def update_multipliers(self, y, z, u_cached=None, od_flow_cached=None):
         """Update Lagrangian multipliers using standard ALM update
 
         Args:
-            x1: Major path flows
-            theta: Latent variables
-            u_cached: Pre-computed U_r @ theta (avoids recomputation)
+            y: Major path flows
+            z: Latent variables
+            u_cached: Pre-computed U_r @ z (avoids recomputation)
             od_flow_cached: Pre-computed OD flows (avoids recomputation)
         """
         # Use cached values if provided, otherwise compute
@@ -1460,19 +1462,19 @@ class ALM:
             od_flow = od_flow_cached
         else:
             if self.r > 0:
-                u = u_cached if u_cached is not None else self.U_r @ theta
-                od_flow = self.A1 @ x1 + self.A2 @ u
+                u = u_cached if u_cached is not None else self.U_r @ z
+                od_flow = self.A1 @ y + self.A2 @ u
             else:
-                od_flow = self.A1 @ x1
+                od_flow = self.A1 @ y
 
         # Standard ALM update for OD conservation: λ^(k+1) = λ^k + ρ*(od_flow - d)
         od_error = od_flow - self.d_multi
-        self.lambda_od += self.rho_od * od_error
+        self.lambda_od += self.c1 * od_error
 
         # Minor path non-negativity (inequality): KKT projection
         if self.r > 0:
-            self.lambda_minor = np.maximum(
-                0, self.lambda_minor - self.rho_nonneg_minor * self.x2
+            self.mu = np.maximum(
+                0, self.mu - self.c2 * self.w
             )
 
     def update_penalties(self, od_viol, minor_viol, eta=0.25):
@@ -1489,7 +1491,7 @@ class ALM:
             # Check if violation decreased sufficiently
             if self.prev_od_viol is None or od_viol > eta * self.prev_od_viol:
                 # Violation didn't decrease enough, increase penalty
-                self.rho_od = min(self.rho_od * self.tau, self.MAX_PENALTY)
+                self.c1 = min(self.c1 * self.tau, self.MAX_PENALTY)
             # else: keep penalty the same (violation decreased sufficiently)
 
         # Store current violation for next iteration
@@ -1500,8 +1502,8 @@ class ALM:
             # Check if violation decreased sufficiently
             if self.prev_minor_viol is None or minor_viol > eta * self.prev_minor_viol:
                 # Violation didn't decrease enough, increase penalty
-                self.rho_nonneg_minor = min(
-                    self.rho_nonneg_minor * self.tau, self.MAX_PENALTY
+                self.c2 = min(
+                    self.c2 * self.tau, self.MAX_PENALTY
                 )
             # else: keep penalty the same (violation decreased sufficiently)
 
@@ -1519,7 +1521,7 @@ class ALM:
         print("AUGMENTED LAGRANGIAN METHOD (KKT PROJECTION + STAGNATION)")
         print(f"{'=' * 116}")
         print(
-            f"{'Outer':>6} {'Inner':>6} {'Status':>6} {'Objective':>12} {'OD Viol':>10} {'Minor Viol':>11} {'ρ_OD':>10} {'ρ_minor':>10} {'Link R²':>8} {'Inner(s)':>10} {'Outer(s)':>10}"
+            f"{'Outer':>6} {'Inner':>6} {'Status':>6} {'Objective':>12} {'OD Viol':>10} {'Minor Viol':>11} {'c1':>10} {'c2':>10} {'Link R²':>8} {'Inner(s)':>10} {'Outer(s)':>10}"
         )
         print(f"{'-' * 116}")
 
@@ -1532,14 +1534,14 @@ class ALM:
         minor_viol,
         inner_time,
         outer_time,
-        initial_rho_od,
-        initial_rho_nonneg_minor,
+        initial_c1,
+        initial_c2,
     ):
         status = "S" if result.success else "F"
         print(
             f"{outer_iter:>6} {result.nit:>6} {status:>6} {result.fun:>12.4e} "
             f"{od_viol:>10.7f} {minor_viol:>10.7f} "
-            f"{initial_rho_od:>10.2e} {initial_rho_nonneg_minor:>10.2e} "
+            f"{initial_c1:>10.2e} {initial_c2:>10.2e} "
             f"{metrics['link_r2']:>8.4f} "
             f"{inner_time:>10.3f} {outer_time:>10.3f}"
         )
@@ -1767,10 +1769,10 @@ def build_threshold_summary(
         "nonneg_minor_violation": viol[1],
         "link_r2": final_metrics["link_r2"],
         "link_mae": final_metrics["link_mae"],
-        "x1_r2": final_metrics["x1_r2"],
-        "x1_mae": final_metrics["x1_mae"],
-        "x2_r2": final_metrics["x2_r2"],
-        "x2_mae": final_metrics["x2_mae"],
+        "y_r2": final_metrics["y_r2"],
+        "y_mae": final_metrics["y_mae"],
+        "w_r2": final_metrics["w_r2"],
+        "w_mae": final_metrics["w_mae"],
         "travel_time_r2": final_metrics["travel_time_r2"],
         "travel_time_mae": final_metrics["travel_time_mae"],
         "converged": (viol[0] < gamma and viol[1] < gamma),
@@ -1797,7 +1799,7 @@ def compute_svd_for_threshold(decomp, n_minor, rank, threshold):
         }
 
     # SVD compression for minor paths
-    svd_dict = compute_svd_compression(decomp["B2"], decomp["x2_ref"], max_rank=rank)
+    svd_dict = compute_svd_compression(decomp["B2"], decomp["w_ref"], max_rank=rank)
     if svd_dict is None:
         print(f"   SVD compression failed - skipping threshold {threshold}")
     return svd_dict
@@ -1947,8 +1949,8 @@ def print_decomp_stats(decomp):
     major_pct = 100 * n_major / n_total
 
     # Flow captured by major paths (use nansum to handle NaN values)
-    major_flow = np.nansum(decomp["x1_ref"])
-    minor_flow = np.nansum(decomp["x2_ref"])
+    major_flow = np.nansum(decomp["y_ref"])
+    minor_flow = np.nansum(decomp["w_ref"])
     total_flow = major_flow + minor_flow
     major_flow_pct = 100 * major_flow / total_flow if total_flow > 0 else 0
 
@@ -1983,7 +1985,7 @@ def print_link_volume_analysis(result, v_ref, capacity):
 def print_od_violation_analysis(optimizer, result, gamma):
     # Print detailed OD violation information
     od_details = optimizer.get_od_violation_details(
-        result["x1"], result["theta"], gamma
+        result["y"], result["z"], gamma
     )
     print("  OD Constraint Details:")
     print("    Accuracy Metrics:")
@@ -2008,17 +2010,17 @@ def print_od_violation_analysis(optimizer, result, gamma):
     if optimizer.r > 0:
         print("  Minor Path Non-negativity Details:")
         # Already computed in get_od_violation_details
-        x2 = optimizer.x2
-        n_minor = len(x2)
+        w = optimizer.w
+        n_minor = len(w)
 
         # Count violations
-        negative_flows = x2 < -gamma
+        negative_flows = w < -gamma
         n_violations = np.sum(negative_flows)
 
         if n_violations > 0:
-            min_flow = np.min(x2)
-            mean_negative = np.mean(x2[negative_flows]) if n_violations > 0 else 0.0
-            max_violation = np.max(-x2[negative_flows])
+            min_flow = np.min(w)
+            mean_negative = np.mean(w[negative_flows]) if n_violations > 0 else 0.0
+            max_violation = np.max(-w[negative_flows])
 
             print(f"    Minor paths with negative flow: {n_violations}/{n_minor}")
             print(f"    Min flow (most negative): {min_flow:.7f}")
@@ -2026,10 +2028,10 @@ def print_od_violation_analysis(optimizer, result, gamma):
             print(f"    Max violation magnitude: {max_violation:.7f}")
 
             # Show worst violators
-            worst_indices = np.argsort(x2)[: min(3, n_violations)]
+            worst_indices = np.argsort(w)[: min(3, n_violations)]
             print("    Top violating minor paths:")
             for i, idx in enumerate(worst_indices, 1):
-                print(f"      {i}. Path #{idx}: flow={x2[idx]:.7f}")
+                print(f"      {i}. Path #{idx}: flow={w[idx]:.7f}")
         else:
             print(f"    All {n_minor} minor paths have non-negative flow")
     else:
