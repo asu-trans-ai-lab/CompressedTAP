@@ -449,7 +449,7 @@ def compute_svd_compression(B2, x2_ref, rank_pct=0.30, max_rank=50, use_truncate
 
         U_r = U_truncated
         V_r = Vt_truncated.T
-        # Create dense D matrix for threshold file (different from KKT_stagnation)
+        # Create dense D matrix
         Sigma_r = np.diag(sigma)
         D = V_r @ Sigma_r
 
@@ -470,7 +470,7 @@ def compute_svd_compression(B2, x2_ref, rank_pct=0.30, max_rank=50, use_truncate
         #     V_r = Vt_svd.T (shape: n_links × r)
         U_r = U_svd
         V_r = Vt_svd.T
-        # Create dense D matrix for threshold file
+        # Create dense D matrix
         Sigma_r = np.diag(sigma)
         D = V_r @ Sigma_r
 
@@ -501,11 +501,11 @@ def bpr_gradient(v, capacity, t_0, alpha=0.15, beta=4.0):
     return t_0 * alpha * (v / capacity) ** beta
 
 ################################################################################
-# BERTSEKAS ALM OPTIMIZER
+# ALM OPTIMIZER
 ################################################################################
 
-class BertsekasALM:
-    """Bertsekas ALM optimizer"""
+class ALM:
+    """ALM optimizer"""
 
     def __init__(
         self,
@@ -783,7 +783,7 @@ class BertsekasALM:
 
         return total_obj, grad
 
-    def objective_and_gradient_direct_new(self, z):
+    def objective_and_gradient_direct_enhanced(self, z):
         """Direct objective/gradient with minor allocation reductions.
 
         Improvements vs objective_and_gradient_direct:
@@ -859,6 +859,8 @@ class BertsekasALM:
 
     def objective_and_gradient_factored(self, z):
         """Compute augmented Lagrangian using factored form V_r @ (sigma * theta) - SPARSE FRIENDLY
+
+        The factored form precomputes the expensive B2.T @ U_r once during setup
         
         MATHEMATICAL FOUNDATION:
         ========================
@@ -898,52 +900,6 @@ class BertsekasALM:
         Factored method (this function):
             v += V_r @ (sigma * theta)
             grad_theta += sigma * (V_r.T @ grad_v)
-        
-        WHY IS THIS FASTER?
-        ===================
-        1. For SVD compression: V_r is DENSE (n_links × r)
-           - No speedup vs chain rule
-           - Both methods equivalent in cost
-           
-        2. For column_subset compression: V_r is SPARSE
-           - V_r has only k nonzeros per row (where k << n_links)
-           - Example: If k=5, V_r has 99.8% sparsity for n_links=2950
-           - Sparse matmul: O(nnz(V_r) * r) vs Dense matmul: O(n_links * n_minor)
-           - Speedup: 10-100x depending on sparsity
-           
-        3. For random_projection compression: V_r is SPARSE
-           - V_r typically has ~1% nonzero entries (random sparse projection)
-           - Similar speedup to column_subset
-        
-        COMPLEXITY ANALYSIS:
-        ====================
-        Assume: n_links=2950, n_minor=24125, r=50
-        
-        Chain rule:
-            Forward:  O(n_minor*r) + O(n_links*n_minor) = O(24125*50) + O(2950*24125)
-                    = 1.2M + 71.2M = 72.4M ops
-            Backward: O(n_links*n_minor) + O(n_minor*r) = 72.4M ops
-            Total: ~145M ops (if B2 is dense)
-            
-        Factored (sparse V_r with 1% density):
-            Forward:  O(r) + O(nnz(V_r)) = 50 + 0.01*2950*50 = 1,525 ops
-            Backward: O(nnz(V_r)) = 1,475 ops
-            Total: ~3K ops
-            Speedup: 48,000x !
-            
-        Factored (dense V_r for SVD):
-            Forward:  O(r) + O(n_links*r) = 50 + 147,500 = 147,550 ops
-            Backward: O(n_links*r) = 147,500 ops
-            Total: ~295K ops
-            Speedup: 500x (avoiding expensive B2 operations)
-        
-        KEY INSIGHT:
-        ============
-        Even for dense V_r (SVD), factored form is faster because:
-        - Avoids B2 (n_links × n_minor) which is large and potentially dense
-        - Uses V_r (n_links × r) where r << n_minor
-        - Matrix dimensions: (2950 × 50) vs (2950 × 24125)
-        - The factored form "precomputes" the expensive B2.T @ U_r once during setup
         """
         x1 = z[: self.s]
         theta = z[self.s :] if self.r > 0 else np.array([], dtype=np.float64)
@@ -1014,7 +970,7 @@ class BertsekasALM:
         return total_obj, grad
 
     def objective_and_gradient_mixed(self, z):
-        """Compute augmented Lagrangian using MIXED approach - HYBRID BEST OF BOTH
+        """Compute augmented Lagrangian using MIXED approach
         
         This function combines:
         1. Factored form for LINK VOLUMES: v += V_r @ (sigma * theta)
@@ -1205,7 +1161,7 @@ class BertsekasALM:
 
         return details
 
-    def compute_metrics(self, x1, theta, v):
+    def compute_metrics(self, x1, v):
         """Compute comprehensive metrics"""
         # Handle minor path metrics (only if minor paths exist)
         if self.r > 0:
@@ -1367,6 +1323,7 @@ class BertsekasALM:
             )
             return True, convergence_reason
 
+        # CONVERGENCE CHECK 4: Max iterations reached
         if outer_iter == max_outer_iter - 1:
             convergence_reason = f"Max iterations ({max_outer_iter}) reached"
             return False, convergence_reason
@@ -1388,8 +1345,6 @@ class BertsekasALM:
     ):
         if enable_warm_start:
             # warm start
-            # print("  Using warm start (0.1) for optimization")
-            # x1 = np.maximum(self.x1_ref, 0.1)
             print("  Using warm start (0.0) for optimization")
             x1 = np.copy(self.x1_ref)
         else:
@@ -1421,8 +1376,6 @@ class BertsekasALM:
                 # Add small noise to break symmetry
                 x1 += np.random.uniform(0, 0.01, size=self.s)
             else:
-                # print(f"  Using cold start for optimization (0.1, {self.k} OD pairs)")
-                # x1 = np.ones(self.s) * 0.1
                 print(f"  Using cold start for optimization (0.0, {self.k} OD pairs)")
                 x1 = np.zeros(self.s)
 
@@ -1441,7 +1394,7 @@ class BertsekasALM:
     @staticmethod
     def print_header():
         print(f"\n{'=' * 125}")
-        print("BERTSEKAS AUGMENTED LAGRANGIAN METHOD (KKT PROJECTION + STAGNATION)")
+        print("AUGMENTED LAGRANGIAN METHOD (KKT PROJECTION + STAGNATION)")
         print(f"{'=' * 125}")
         print(
             f"{'Outer':>6} {'Inner':>6} {'Status':>6} {'Objective':>12} {'OD Viol':>10} {'Minor Viol':>11} {'ρ_OD':>10} {'ρ_minor':>10} {'Link R²':>8} {'Inner(s)':>10} {'Outer(s)':>10}"
@@ -1466,12 +1419,7 @@ class BertsekasALM:
         stagnation_window=3,
         verbose=True,
     ):
-        """Run Bertsekas ALM with KKT projection and stagnation detection"""
-        if verbose:
-            self.print_header()
-
-        convergence_reason = "Max iterations reached"
-
+        """Run Augmented Lagrangian Method (KKT projection + stagnation detection)"""
         z, x1, theta, bounds = self.initialize_solution(
             enable_warm_start=False, enable_proportional_cold_start=True
         )
@@ -1483,13 +1431,15 @@ class BertsekasALM:
             "ftol": 1e-9,
         }
 
+        if verbose:
+            self.print_header()
+
         for outer_iter in range(max_outer_iter):
             outer_cpu_start = time.process_time()
 
             # Store initial penalty values
             initial_rho_od = self.rho_od
             initial_rho_nonneg_minor = self.rho_nonneg_minor
-
 
             inner_cpu_start = time.process_time()
             result = minimize(
@@ -1534,7 +1484,7 @@ class BertsekasALM:
                 # Reuse cached u instead of recomputing U_r @ theta
                 v += self.B2.T.dot(u_cached)
 
-            metrics = self.compute_metrics(x1, theta, v)
+            metrics = self.compute_metrics(x1, v)
             self.update_history(
                 result,
                 metrics,
@@ -1591,8 +1541,7 @@ def analyze_path_flow_distribution(x_ref):
         print("\n Warning: All path flows are zero or NaN!")
         return pd.DataFrame()
 
-    # flow_percentiles = np.percentile(x_nonzero, [10, 25, 50, 75, 90, 95, 100])
-    flow_percentiles = np.percentile(x_nonzero, [10, 20, 30, 40, 50, 60, 70, 80, 90, 100])
+    flow_percentiles = np.percentile(x_nonzero, [10, 20, 30, 40, 50, 60, 70, 80, 90])
 
     print("\nPath flow distribution:")
     print(f"  Max: {np.max(x_valid):.2f}")
@@ -1613,7 +1562,6 @@ def analyze_path_flow_distribution(x_ref):
     print(f"    70th: {flow_percentiles[6]:.2f}")
     print(f"    80th: {flow_percentiles[7]:.2f}")
     print(f"    90th: {flow_percentiles[8]:.2f}")
-    print(f"    100th: {flow_percentiles[9]:.2f}")
     
     return flow_percentiles
 
@@ -1750,6 +1698,7 @@ def setup_thresholds(x_ref, od_info=None, num_bins=11):
 
 
 def build_threshold_summary(
+    r,
     threshold,
     n_major,
     n_minor,
@@ -1757,7 +1706,6 @@ def build_threshold_summary(
     major_flow,
     minor_flow,
     major_flow_pct,
-    r,
     compression_ratio,
     total_vars,
     n_total,
@@ -1920,7 +1868,7 @@ def run_threshold_sensitivity_analysis(
 
         # Optimize
         try:
-            optimizer = BertsekasALM(
+            optimizer = ALM(
                 decomp,
                 svd_dict,
                 capacity,
@@ -1941,12 +1889,14 @@ def run_threshold_sensitivity_analysis(
                 stagnation_tol=1e-6,
                 stagnation_window=3,
             )
+
             opt_cpu_time = time.process_time() - opt_cpu_start
 
             print_link_volume_analysis(result, v_ref, capacity)
             print_od_violation_analysis(optimizer, result, gamma)
 
             summary = build_threshold_summary(
+                r=r,
                 threshold=threshold,
                 n_major=n_major,
                 n_minor=n_minor,
@@ -1954,7 +1904,6 @@ def run_threshold_sensitivity_analysis(
                 major_flow=major_flow,
                 minor_flow=minor_flow,
                 major_flow_pct=major_flow_pct,
-                r=r,
                 compression_ratio=compression_ratio,
                 total_vars=total_vars,
                 n_total=n_total,
@@ -1989,7 +1938,7 @@ def print_link_volume_analysis(result, v_ref, capacity):
     v_pct_diff = 100 * v_diff / (v_ref + 1e-10)
     congested_links = v_ref > 0.5 * capacity  # Links at >50% capacity
 
-    print("  Link Volume Analysis:")
+    print("\n  Link Volume Analysis:")
     print(f"    Max absolute error: {np.max(np.abs(v_diff)):.2f}")
     print(
         f"    # links with >10% error: {np.sum(np.abs(v_pct_diff) > 10)}/{len(v)}"
@@ -2028,7 +1977,8 @@ def print_od_violation_analysis(optimizer, result, gamma):
     # Minor path non-negativity violation details
     if optimizer.r > 0:
         print("  Minor Path Non-negativity Details:")
-        x2 = optimizer.x2  # Already computed in get_od_violation_details
+        # Already computed in get_od_violation_details
+        x2 = optimizer.x2 
         n_minor = len(x2)
         
         # Count violations
@@ -2110,7 +2060,7 @@ def print_summary_table(results_df):
         "link_r2",
         "bpr_gap_pct",
         "od_violation",
-        "nonneg_minor_violation",  # Add Minor Viol column
+        "nonneg_minor_violation",
         "opt_cpu_time",
         "speedup_cpu_time",
         "speedup_ub",
@@ -2152,22 +2102,14 @@ def print_summary_table(results_df):
 ################################################################################
 
 if __name__ == "__main__":
-    # choose mode from one of the following options: ["tap", "alm"]
-    mode = "alm"
-
     rank = 50
     gamma = 1e-4
 
-    # data_dir = '09_Chicago_Regional'
-    # data_dir = "10_Chicago_Sketch/TAPLite/2x"
     data_dir = "chicago_sketch"
-    # data_dir = "12_Philadelphia"
-    # data_dir = "sioux_falls"
 
     link_file = f"data/{data_dir}/link.csv"
     link_perf_file = f"data/{data_dir}/link_performance_ue.csv"
     # link_perf_file = None  # No link performance file provided
-    # route_file = f"data/{data_dir}/route_assignment.csv"
     route_file = f"data/{data_dir}/columns.csv"
     # demand_file = f"data/{data_dir}/demand.csv"
     demand_file = None  # No demand file provided
