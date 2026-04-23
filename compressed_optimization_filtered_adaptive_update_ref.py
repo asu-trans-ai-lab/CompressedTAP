@@ -930,9 +930,7 @@ class ALM:
         # Non-negativity constraints for minor paths: U_r*θ ≥ 0 (only if minor paths exist)
         # Formula (14): (1/2c) * {(max{0, γ - c·[U_r z]})² - γ²}
         if self.r > 0:
-            max_term_minor = np.maximum(
-                0, self.mu - self.c2 * u
-            )
+            max_term_minor = np.maximum(0, self.mu - self.c2 * u)
             minor_penalty_term = (1.0 / (2.0 * self.c2)) * (
                 np.sum(max_term_minor**2) - np.sum(self.mu**2)
             )
@@ -959,9 +957,7 @@ class ALM:
             # map back to z space
             grad_z = self.U_r.T @ tmp
             # KKT projection gradient: -U_r^T max{0, mu - mu·w}
-            grad_z -= self.U_r.T @ np.maximum(
-                0, self.mu - self.c2 * u
-            )
+            grad_z -= self.U_r.T @ np.maximum(0, self.mu - self.c2 * u)
             # Combine gradients
             grad = np.concatenate([grad_y, grad_z])
         else:
@@ -1004,9 +1000,7 @@ class ALM:
 
         # Non-negativity constraints for minor paths
         if self.r > 0:
-            max_term_minor = np.maximum(
-                0, self.mu - self.c2 * u
-            )
+            max_term_minor = np.maximum(0, self.mu - self.c2 * u)
             minor_penalty_term = (1.0 / (2.0 * self.c2)) * (
                 np.sum(max_term_minor**2) - np.sum(self.mu**2)
             )
@@ -1030,9 +1024,7 @@ class ALM:
             # OD constraint gradient using direct M^T: M^T @ (λ + c*error)
             grad_z += self.M.T @ (self.lambda_od + self.c1 * od_error)
             # KKT projection for non-negativity
-            grad_z -= self.U_r.T @ np.maximum(
-                0, self.mu - self.c2 * u
-            )
+            grad_z -= self.U_r.T @ np.maximum(0, self.mu - self.c2 * u)
             grad = np.concatenate([grad_y, grad_z])
         else:
             grad = grad_y
@@ -1079,9 +1071,7 @@ class ALM:
         # Non-negativity constraints for minor paths
         if self.r > 0:
             # Reuse this vector in both objective penalty and KKT projection gradient
-            max_term_minor = np.maximum(
-                0, self.mu - self.c2 * u
-            )
+            max_term_minor = np.maximum(0, self.mu - self.c2 * u)
             minor_penalty_term = (1.0 / (2.0 * self.c2)) * (
                 np.sum(max_term_minor**2) - np.sum(self.mu**2)
             )
@@ -1190,9 +1180,7 @@ class ALM:
 
         # Non-negativity constraints for minor paths
         if self.r > 0:
-            max_term_minor = np.maximum(
-                0, self.mu - self.c2 * u
-            )
+            max_term_minor = np.maximum(0, self.mu - self.c2 * u)
             minor_penalty_term = (1.0 / (2.0 * self.c2)) * (
                 np.sum(max_term_minor**2) - np.sum(self.mu**2)
             )
@@ -1217,9 +1205,7 @@ class ALM:
             # OD constraint: M^T @ (λ + c*error)
             grad_z += self.M.T @ (self.lambda_od + self.c1 * od_error)
             # KKT projection for non-negativity
-            grad_z -= self.U_r.T @ np.maximum(
-                0, self.mu - self.c2 * u
-            )
+            grad_z -= self.U_r.T @ np.maximum(0, self.mu - self.c2 * u)
             grad = np.concatenate([grad_y, grad_z])
         else:
             grad = grad_y
@@ -1286,9 +1272,7 @@ class ALM:
 
         # Non-negativity constraints for minor paths
         if self.r > 0:
-            max_term_minor = np.maximum(
-                0, self.mu - self.c2 * u
-            )
+            max_term_minor = np.maximum(0, self.mu - self.c2 * u)
             minor_penalty_term = (1.0 / (2.0 * self.c2)) * (
                 np.sum(max_term_minor**2) - np.sum(self.mu**2)
             )
@@ -1310,13 +1294,9 @@ class ALM:
             # BPR gradient: FACTORED form (sparse-friendly)
             grad_z = self.sigma * (self.V_r.T @ grad_v)
             # OD constraint: CHAIN RULE form (memory efficient)
-            grad_z += self.U_r.T @ (
-                self.A2.T @ (self.lambda_od + self.c1 * od_error)
-            )
+            grad_z += self.U_r.T @ (self.A2.T @ (self.lambda_od + self.c1 * od_error))
             # KKT projection for non-negativity
-            grad_z -= self.U_r.T @ np.maximum(
-                0, self.mu - self.c2 * u
-            )
+            grad_z -= self.U_r.T @ np.maximum(0, self.mu - self.c2 * u)
             grad = np.concatenate([grad_y, grad_z])
         else:
             grad = grad_y
@@ -1463,9 +1443,7 @@ class ALM:
 
         # Minor path non-negativity (inequality): KKT projection
         if self.r > 0:
-            self.mu = np.maximum(
-                0, self.mu - self.c2 * self.w
-            )
+            self.mu = np.maximum(0, self.mu - self.c2 * self.w)
 
     def update_penalties(self, od_viol, minor_viol, gamma=0.25):
         """Adaptive penalty update: only increase if violation doesn't decrease sufficiently
@@ -1490,11 +1468,12 @@ class ALM:
         # Minor path non-negativity penalty
         if minor_viol >= self.tolerance:
             # Check if violation decreased sufficiently
-            if self.prev_minor_viol is None or minor_viol > gamma * self.prev_minor_viol:
+            if (
+                self.prev_minor_viol is None
+                or minor_viol > gamma * self.prev_minor_viol
+            ):
                 # Violation didn't decrease enough, increase penalty
-                self.c2 = min(
-                    self.c2 * self.beta_penalty, self.MAX_PENALTY
-                )
+                self.c2 = min(self.c2 * self.beta_penalty, self.MAX_PENALTY)
             # else: keep penalty the same (violation decreased sufficiently)
 
         # Store current violation for next iteration
@@ -1667,7 +1646,7 @@ def setup_thresholds(x_ref, od_info=None, num_bins=10):
 
     # Use equally-spaced indices only within max_minor_paths range
     # First threshold is always 0, last is max flow, rest are equally spaced
-    indices = np.linspace(0, max_minor_paths - 1, num_bins+1, dtype=int)
+    indices = np.linspace(0, max_minor_paths - 1, num_bins + 1, dtype=int)
     thresholds = sorted_flows[indices].tolist()
 
     # Enforce first threshold = 0 and last threshold = max flow
@@ -1795,123 +1774,6 @@ def compute_svd_for_threshold(decomp, n_minor, rank, threshold):
     return svd_dict
 
 
-def run_threshold_sensitivity_analysis(
-    B, x_ref, v_ref, capacity, t_0, od_info, output_dir, rank, thresholds, tolerance=0.1
-):
-    """
-    Run threshold sensitivity analysis
-
-    Tests different threshold values to understand:
-    1. Impact on compression ratio (major vs minor paths)
-    2. Impact on solution quality (R², MAE)
-    3. Impact on computational efficiency
-    4. Trade-offs between model complexity and accuracy
-    """
-    output_dir = Path(output_dir)
-    output_dir.mkdir(exist_ok=True, parents=True)
-
-    print("\n" + "=" * 101)
-    print(f" THRESHOLD SENSITIVITY ANALYSIS with Tolerance = {tolerance}")
-    print("=" * 101)
-
-    results = []
-    prev_config = None  # Track previous (n_major, n_minor, rank) configuration
-
-    for i, threshold in enumerate(thresholds):
-        print(f"\n[{i + 1}/{len(thresholds)}] Testing threshold = {threshold}")
-        print("-" * 100)
-
-        # Decompose with this threshold
-        decomp = decompose_paths(B, x_ref, od_info, threshold)
-
-        n_major, n_minor, major_pct, major_flow, minor_flow, major_flow_pct = (
-            print_decomp_stats(decomp)
-        )
-
-        svd_dict = compute_svd_for_threshold(decomp, n_minor, rank, threshold)
-        if svd_dict is None:
-            continue
-
-        # Check if configuration is same as previous iteration
-        current_config = (n_major, n_minor)
-        if prev_config is not None and current_config == prev_config:
-            print(
-                f"     Skipping: Same configuration as previous threshold (n_major={n_major}, n_minor={n_minor})"
-            )
-            continue
-
-        prev_config = current_config  # Update for next iteration
-
-        # Report compression statistics
-        r, svd_time, total_vars, compression_ratio = print_compression_stats(
-            svd_dict, n_minor, n_major
-        )
-
-        # Optimize
-        try:
-            optimizer = ALM(
-                decomp,
-                svd_dict,
-                capacity,
-                t_0,
-                od_info,
-                v_ref,
-                c1_init=1e3,
-                c2_init=1e3,
-                beta_penalty=4.0,
-                tolerance=tolerance,
-            )
-
-            opt_cpu_start = time.process_time()
-
-            result = optimizer.optimize(
-                max_outer_iter=20,
-                max_inner_iter=200,
-                stagnation_tol=1e-6,
-                stagnation_window=3,
-            )
-
-            opt_cpu_time = time.process_time() - opt_cpu_start
-
-            print_link_volume_analysis(result, v_ref, capacity)
-            print_od_violation_analysis(optimizer, result, tolerance)
-
-            summary = build_threshold_summary(
-                r=r,
-                threshold=threshold,
-                n_major=n_major,
-                n_minor=n_minor,
-                major_pct=major_pct,
-                major_flow=major_flow,
-                minor_flow=minor_flow,
-                major_flow_pct=major_flow_pct,
-                compression_ratio=compression_ratio,
-                total_vars=total_vars,
-                n_total=n_major + n_minor,
-                svd_time=svd_time,
-                opt_cpu_time=opt_cpu_time,
-                optimizer=optimizer,
-                result=result,
-                tolerance=tolerance,
-            )
-
-            results.append(summary)
-            print_summary(summary)
-
-        except Exception as e:
-            print(f"    Optimization failed: {e}")
-            continue
-
-    # Save results
-    results_df = pd.DataFrame(results)
-    results_df.to_csv(output_dir / "threshold_sensitivity_results.csv", index=False)
-    print(f"\n  Saved: {output_dir / 'threshold_sensitivity_results.csv'}")
-
-    print_summary_table(results_df)
-
-    return results_df
-
-
 def print_compression_stats(svd_dict, n_minor, n_major):
     r = svd_dict["r"]
     svd_time = svd_dict["svd_time"]
@@ -1971,9 +1833,7 @@ def print_link_volume_analysis(result, v_ref, capacity):
 
 def print_od_violation_analysis(optimizer, result, gamma):
     # Print detailed OD violation information
-    od_details = optimizer.get_od_violation_details(
-        result["y"], result["z"], gamma
-    )
+    od_details = optimizer.get_od_violation_details(result["y"], result["z"], gamma)
     print("  OD Constraint Details:")
     print("    Accuracy Metrics:")
     print(f"      R²: {od_details['od_r2']:.6f}")
@@ -2111,12 +1971,12 @@ def print_summary_table(results_df):
 # MAIN
 ################################################################################
 
-if __name__ == "__main__":
+
+def main():
     rank = 50
     tolerance = 1e-4
 
     data_dir = "chicago_sketch"
-    output_dir = f"./test/{data_dir}/rank{rank}"
 
     link_file = f"data/{data_dir}/link.csv"
     # link_perf_file = f"data/{data_dir}/link_performance_ue.csv"
@@ -2142,7 +2002,7 @@ if __name__ == "__main__":
     print(f"\nTesting threshold = {threshold}")
     print("-" * 100)
 
-    # Decompose with this threshold
+    # Decompose with the selected threshold
     decomp = decompose_paths(B, x_ref, od_info, threshold)
 
     n_major, n_minor, major_pct, major_flow, minor_flow, major_flow_pct = (
@@ -2151,7 +2011,9 @@ if __name__ == "__main__":
 
     svd_dict = compute_svd_for_threshold(decomp, n_minor, rank, threshold)
     if svd_dict is None:
-        raise Exception(f"SVD compression failed - cannot proceed with threshold {threshold}")
+        raise Exception(
+            f"SVD compression failed - cannot proceed with threshold {threshold}"
+        )
 
     # Report compression statistics
     r, svd_time, total_vars, compression_ratio = print_compression_stats(
@@ -2210,3 +2072,7 @@ if __name__ == "__main__":
     print("\n" + "=" * 101)
     print(" COMPLETE")
     print("=" * 101 + "\n")
+
+
+if __name__ == "__main__":
+    main()
