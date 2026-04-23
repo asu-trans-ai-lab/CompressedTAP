@@ -25,7 +25,6 @@ from scipy.sparse import csr_matrix
 from scipy.sparse.linalg import svds
 from scipy.optimize import minimize
 from sklearn.decomposition import TruncatedSVD
-import sys
 import time
 from pathlib import Path
 import warnings
@@ -1393,13 +1392,13 @@ class ALM:
 
     @staticmethod
     def print_header():
-        print(f"\n{'=' * 125}")
+        print(f"\n{'=' * 116}")
         print("AUGMENTED LAGRANGIAN METHOD (KKT PROJECTION + STAGNATION)")
-        print(f"{'=' * 125}")
+        print(f"{'=' * 116}")
         print(
             f"{'Outer':>6} {'Inner':>6} {'Status':>6} {'Objective':>12} {'OD Viol':>10} {'Minor Viol':>11} {'ρ_OD':>10} {'ρ_minor':>10} {'Link R²':>8} {'Inner(s)':>10} {'Outer(s)':>10}"
         )
-        print(f"{'-' * 125}")
+        print(f"{'-' * 116}")
 
     def print_iteration_metrics(self, outer_iter, result, metrics, od_viol, minor_viol, inner_time, outer_time, initial_rho_od, initial_rho_nonneg_minor):
         status = "S" if result.success else "F"
@@ -1749,6 +1748,71 @@ def build_threshold_summary(
     }
 
 
+def print_decomp_stats(decomp):
+    n_major = decomp["s"]
+    n_minor = decomp["n_minor"]
+    n_total = n_major + n_minor
+    major_pct = 100 * n_major / n_total
+
+    # Flow captured by major paths (use nansum to handle NaN values)
+    major_flow = np.nansum(decomp["x1_ref"])
+    minor_flow = np.nansum(decomp["x2_ref"])
+    total_flow = major_flow + minor_flow
+    major_flow_pct = 100 * major_flow / total_flow if total_flow > 0 else 0
+
+    print("  Decomposition:")
+    print(
+        f"    Major: {n_major} paths ({major_pct:.1f}%), flow: {major_flow:.2f} ({major_flow_pct:.1f}%)"
+    )
+    print(
+        f"    Minor: {n_minor} paths ({100 - major_pct:.1f}%), flow: {minor_flow:.2f} ({100 - major_flow_pct:.1f}%)"
+    )
+
+    return n_major, n_minor, major_pct, major_flow, minor_flow, major_flow_pct
+
+
+def compute_svd_for_threshold(decomp, n_minor, rank, threshold):
+    # Handle special case: no minor paths (when threshold is 0 or very low, all paths become major)
+    if n_minor == 0:
+        print(
+            "      No minor paths - running optimization with major paths only (no SVD compression)"
+        )
+        # Create empty svd_dict for compatibility
+        return {
+            "U_r": csr_matrix((0, 0), dtype=np.float64),
+            "D": csr_matrix((0, 0), dtype=np.float64),
+            "theta_ref": np.array([], dtype=np.float64),
+            "r": 0,
+            "compression_ratio": float("inf"),
+            "explained_variance_ratio": 1.0,
+            "reconstruction_error": 0.0,
+            "svd_time": 0.0,
+        }
+
+    # SVD compression for minor paths
+    svd_dict = compute_svd_compression(
+        decomp["B2"], decomp["x2_ref"], max_rank=rank
+    )
+    if svd_dict is None:
+        print(f"   SVD compression failed - skipping threshold {threshold}")
+    return svd_dict
+
+
+def _print_compression_stats(svd_dict, n_minor, n_major):
+    r = svd_dict["r"]
+    svd_time = svd_dict["svd_time"]
+    total_vars = n_major + r
+
+    compression_ratio = n_minor / r if (n_minor > 0 and r > 0) else float("inf")
+    if n_minor > 0:
+        print(
+            f"  SVD: {n_minor} minor paths → {r} latent variables (compression: {compression_ratio:.2f}x, time: {svd_time:.3f}s)"
+        )
+    print(f"  Total decision variables: {total_vars} (vs {n_major + n_minor} original paths)")
+
+    return r, svd_time, total_vars, compression_ratio
+
+
 def run_threshold_sensitivity_analysis(
     B, x_ref, v_ref, capacity, t_0, od_info, output_dir, rank, thresholds, gamma=0.1
 ):
@@ -1778,49 +1842,13 @@ def run_threshold_sensitivity_analysis(
         # Decompose with this threshold
         decomp = decompose_paths(B, x_ref, od_info, threshold)
 
-        n_major = decomp["s"]
-        n_minor = decomp["n_minor"]
-        n_total = n_major + n_minor
-        major_pct = 100 * n_major / n_total
-
-        # Flow captured by major paths (use nansum to handle NaN values)
-        major_flow = np.nansum(decomp["x1_ref"])
-        minor_flow = np.nansum(decomp["x2_ref"])
-        total_flow = major_flow + minor_flow
-        major_flow_pct = 100 * major_flow / total_flow if total_flow > 0 else 0
-
-        print("  Decomposition:")
-        print(
-            f"    Major: {n_major} paths ({major_pct:.1f}%), flow: {major_flow:.2f} ({major_flow_pct:.1f}%)"
-        )
-        print(
-            f"    Minor: {n_minor} paths ({100 - major_pct:.1f}%), flow: {minor_flow:.2f} ({100 - major_flow_pct:.1f}%)"
+        n_major, n_minor, major_pct, major_flow, minor_flow, major_flow_pct = (
+            print_decomp_stats(decomp)
         )
 
-        # Handle special case: no minor paths (when threshold is 0 or very low, all paths become major)
-        if n_minor == 0:
-            print(
-                "      No minor paths - running optimization with major paths only (no SVD compression)"
-            )
-            # Create empty svd_dict for compatibility
-            svd_dict = {
-                "U_r": csr_matrix((0, 0), dtype=np.float64),
-                "D": csr_matrix((0, 0), dtype=np.float64),
-                "theta_ref": np.array([], dtype=np.float64),
-                "r": 0,
-                "compression_ratio": float("inf"),
-                "explained_variance_ratio": 1.0,
-                "reconstruction_error": 0.0,
-                "svd_time": 0.0,
-            }
-        else:
-            # SVD compression for minor paths
-            svd_dict = compute_svd_compression(
-                decomp["B2"], decomp["x2_ref"], max_rank=rank
-            )
-            if svd_dict is None:
-                print(f"   SVD compression failed - skipping threshold {threshold}")
-                continue
+        svd_dict = compute_svd_for_threshold(decomp, n_minor, rank, threshold)
+        if svd_dict is None:
+            continue
 
         # Check if configuration is same as previous iteration
         current_config = (n_major, n_minor)
@@ -1836,16 +1864,7 @@ def run_threshold_sensitivity_analysis(
         prev_config = current_config  # Update for next iteration
 
         # Report compression statistics
-        r = svd_dict["r"]
-        svd_time = svd_dict["svd_time"]
-        total_vars = n_major + r
-        
-        if n_minor > 0:
-            compression_ratio = n_minor / r if r > 0 else float("inf")
-            print(
-                f"  SVD: {n_minor} minor paths → {r} latent variables (compression: {compression_ratio:.2f}x, time: {svd_time:.3f}s)"
-            )
-        print(f"  Total decision variables: {total_vars} (vs {n_total} original paths)")
+        r, svd_time, total_vars, compression_ratio = _print_compression_stats(svd_dict, n_minor, n_major)
 
         # Optimize
         try:
@@ -1887,7 +1906,7 @@ def run_threshold_sensitivity_analysis(
                 major_flow_pct=major_flow_pct,
                 compression_ratio=compression_ratio,
                 total_vars=total_vars,
-                n_total=n_total,
+                n_total=n_major + n_minor,
                 svd_time=svd_time,
                 opt_cpu_time=opt_cpu_time,
                 optimizer=optimizer,
