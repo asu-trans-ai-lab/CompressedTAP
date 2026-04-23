@@ -1,15 +1,5 @@
 """
-Threshold Sensitivity Analysis for ALM with KKT Projection Gradient (FILTERED VERSION)
-- Tests different threshold values for major/minor path decomposition
-- Analyzes impact on compression ratio, accuracy, and computational efficiency
-- Compares trade-offs between model complexity and solution quality
-- FILTERED: d_multi excludes singleton ODs entirely (dimension reduction)
-
-GRADIENT FORMULA (Corrected):
-∇_{y} L = B1^T ∇_v f_BPR + A1^T(λ_od + c1·od_error) - max{0, mu - c2·y}
-∇_z L = D^T ∇_v f_BPR + M^T(λ_od + c1·od_error) - U_r^T max{0, mu - mu·w}
-
-Key change: Uses max{0, λ - c·x} instead of (λ + c·violation)·mask
+Compressed Traffic Assignment with Augmented Lagrangian Method (ALM)
 """
 
 import os
@@ -1587,7 +1577,7 @@ def analyze_path_flow_distribution(x_ref):
     return flow_percentiles
 
 
-def setup_thresholds(x_ref, od_info=None, num_bins=11):
+def setup_thresholds(x_ref, od_info=None, num_bins=10):
     """Setup threshold values for major/minor path decomposition
 
     New approach: Adaptively select thresholds that proportionally split paths into K bins
@@ -1595,7 +1585,7 @@ def setup_thresholds(x_ref, od_info=None, num_bins=11):
     Args:
         x_ref: Reference path flows
         od_info: OD information dict with 'path_to_od' mapping
-        num_bins: Number of bins to split paths into (default: 11)
+        num_bins: Number of bins to split paths into (default: 10)
 
     Returns:
         List of threshold values that split the path set into K equal-sized bins
@@ -1677,7 +1667,7 @@ def setup_thresholds(x_ref, od_info=None, num_bins=11):
 
     # Use equally-spaced indices only within max_minor_paths range
     # First threshold is always 0, last is max flow, rest are equally spaced
-    indices = np.linspace(0, max_minor_paths - 1, num_bins, dtype=int)
+    indices = np.linspace(0, max_minor_paths - 1, num_bins+1, dtype=int)
     thresholds = sorted_flows[indices].tolist()
 
     # Enforce first threshold = 0 and last threshold = max flow
@@ -1847,9 +1837,6 @@ def run_threshold_sensitivity_analysis(
         if prev_config is not None and current_config == prev_config:
             print(
                 f"     Skipping: Same configuration as previous threshold (n_major={n_major}, n_minor={n_minor})"
-            )
-            print(
-                "     This threshold produces identical decomposition - results would be the same"
             )
             continue
 
@@ -2126,14 +2113,14 @@ def print_summary_table(results_df):
 
 if __name__ == "__main__":
     rank = 50
-    gamma = 1e-4
+    tolerance = 1e-4
 
     data_dir = "chicago_sketch"
     output_dir = f"./test/{data_dir}/rank{rank}"
 
     link_file = f"data/{data_dir}/link.csv"
-    link_perf_file = f"data/{data_dir}/link_performance_ue.csv"
-    # link_perf_file = None  # No link performance file provided
+    # link_perf_file = f"data/{data_dir}/link_performance_ue.csv"
+    link_perf_file = None  # No link performance file provided
 
     route_file = f"data/{data_dir}/columns.csv"
     # demand_file = f"data/{data_dir}/demand.csv"
@@ -2147,12 +2134,78 @@ if __name__ == "__main__":
     B, x_ref, v_ref, capacity, t_0, od_info, links, routes = load_gmns_data_with_od(
         link_file, route_file, demand_file, link_perf_file
     )
-    thresholds = setup_thresholds(x_ref, od_info)
 
-    # Run threshold sensitivity analysis
-    results_df = run_threshold_sensitivity_analysis(
-        B, x_ref, v_ref, capacity, t_0, od_info, output_dir, rank, thresholds, gamma
+    # Set up thresholds
+    thresholds = setup_thresholds(x_ref, od_info)
+    threshold = thresholds[0]
+
+    print(f"\nTesting threshold = {threshold}")
+    print("-" * 100)
+
+    # Decompose with this threshold
+    decomp = decompose_paths(B, x_ref, od_info, threshold)
+
+    n_major, n_minor, major_pct, major_flow, minor_flow, major_flow_pct = (
+        print_decomp_stats(decomp)
     )
+
+    svd_dict = compute_svd_for_threshold(decomp, n_minor, rank, threshold)
+    if svd_dict is None:
+        raise Exception(f"SVD compression failed - cannot proceed with threshold {threshold}")
+
+    # Report compression statistics
+    r, svd_time, total_vars, compression_ratio = print_compression_stats(
+        svd_dict, n_minor, n_major
+    )
+
+    opt_cpu_start = time.process_time()
+
+    # Optimize
+    optimizer = ALM(
+        decomp,
+        svd_dict,
+        capacity,
+        t_0,
+        od_info,
+        v_ref,
+        c1_init=1e3,
+        c2_init=1e3,
+        beta_penalty=4.0,
+        tolerance=tolerance,
+    )
+
+    result = optimizer.optimize(
+        max_outer_iter=20,
+        max_inner_iter=200,
+        stagnation_tol=1e-6,
+        stagnation_window=3,
+    )
+
+    opt_cpu_time = time.process_time() - opt_cpu_start
+
+    print_link_volume_analysis(result, v_ref, capacity)
+    print_od_violation_analysis(optimizer, result, tolerance)
+
+    summary = build_threshold_summary(
+        r=r,
+        threshold=threshold,
+        n_major=n_major,
+        n_minor=n_minor,
+        major_pct=major_pct,
+        major_flow=major_flow,
+        minor_flow=minor_flow,
+        major_flow_pct=major_flow_pct,
+        compression_ratio=compression_ratio,
+        total_vars=total_vars,
+        n_total=n_major + n_minor,
+        svd_time=svd_time,
+        opt_cpu_time=opt_cpu_time,
+        optimizer=optimizer,
+        result=result,
+        tolerance=tolerance,
+    )
+
+    print_summary(summary)
 
     print("\n" + "=" * 101)
     print(" COMPLETE")
