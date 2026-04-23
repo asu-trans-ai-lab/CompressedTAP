@@ -423,11 +423,9 @@ def compute_svd_compression(B2, x2_ref, rank_pct=0.30, max_rank=50, use_truncate
             "explained_variance_ratio": 1.0,
             "reconstruction_error": 0.0,
             "svd_time": 0.0,
-            "svd_wall_time": 0.0,
         }
 
     svd_cpu_start = time.process_time()
-    svd_wall_start = time.time()
 
     # Determine rank with conservative limits for large matrices
     r = max(1, min(int(rank_pct * n_minor), max_rank, min(n_minor, m) - 1))
@@ -481,7 +479,6 @@ def compute_svd_compression(B2, x2_ref, rank_pct=0.30, max_rank=50, use_truncate
     theta_ref = U_r.T @ x2_ref
 
     svd_cpu_time = time.process_time() - svd_cpu_start
-    svd_wall_time = time.time() - svd_wall_start
 
     return {
         "U_r": U_r,
@@ -491,7 +488,6 @@ def compute_svd_compression(B2, x2_ref, rank_pct=0.30, max_rank=50, use_truncate
         "r": r,
         "theta_ref": theta_ref,
         "svd_time": svd_cpu_time,
-        "svd_wall_time": svd_wall_time,
     }
 
 
@@ -673,11 +669,8 @@ class BertsekasALM:
             "travel_time_r2": [],
             "travel_time_mae": [],
             "elapsed_time": [],
-            "wall_elapsed_time": [],
             "inner_time": [],
-            "inner_wall_time": [],
             "outer_time": [],
-            "outer_wall_time": [],
         }
 
     def objective_and_gradient_chain_rule(self, z):
@@ -1428,11 +1421,8 @@ class BertsekasALM:
         od_viol,
         minor_viol,
         cpu_elapsed,
-        wall_elapsed,
         inner_cpu_time,
-        inner_wall_time,
         outer_cpu_time,
-        outer_wall_time
     ):
         self.history["outer_iter"].append(outer_iter)
         self.history["inner_iter"].append(result.nit)
@@ -1456,11 +1446,8 @@ class BertsekasALM:
         self.history["travel_time_r2"].append(metrics["travel_time_r2"])
         self.history["travel_time_mae"].append(metrics["travel_time_mae"])
         self.history["elapsed_time"].append(cpu_elapsed)
-        self.history["wall_elapsed_time"].append(wall_elapsed)
         self.history["inner_time"].append(inner_cpu_time)
-        self.history["inner_wall_time"].append(inner_wall_time)
         self.history["outer_time"].append(outer_cpu_time)
-        self.history["outer_wall_time"].append(outer_wall_time)
 
     def initialize_solution(
         self, enable_warm_start=False, enable_proportional_cold_start=True
@@ -1547,7 +1534,6 @@ class BertsekasALM:
         """Run Bertsekas ALM with KKT projection and stagnation detection"""
         verbose = True
         cpu_start_time = time.process_time()
-        wall_start_time = time.time()
 
         convergence_reason = "Max iterations reached"
 
@@ -1560,7 +1546,6 @@ class BertsekasALM:
 
         for outer_iter in range(max_outer_iter):
             outer_cpu_start = time.process_time()
-            outer_wall_start = time.time()
 
             # Store initial penalty values
             initial_rho_od = self.rho_od
@@ -1574,7 +1559,6 @@ class BertsekasALM:
             }
 
             inner_cpu_start = time.process_time()
-            inner_wall_start = time.time()
             result = minimize(
                 fun=lambda z_: self.objective_and_gradient_mixed(z_),
                 x0=z,
@@ -1584,7 +1568,6 @@ class BertsekasALM:
                 options=options,
             )
             inner_cpu_time = time.process_time() - inner_cpu_start
-            inner_wall_time = time.time() - inner_wall_start
 
             z = result.x
             x1 = z[: self.s]
@@ -1606,10 +1589,8 @@ class BertsekasALM:
                 self.update_penalties(od_viol, minor_viol, eta=0.25)
 
             outer_cpu_time = time.process_time() - outer_cpu_start
-            outer_wall_time = time.time() - outer_wall_start
 
             cpu_elapsed = time.process_time() - cpu_start_time
-            wall_elapsed = time.time() - wall_start_time
 
             # Compute link volumes using cached u to avoid recomputing U_r @ theta
             if self.v_singleton is not None:
@@ -1629,11 +1610,8 @@ class BertsekasALM:
                 od_viol,
                 minor_viol,
                 cpu_elapsed,
-                wall_elapsed,
                 inner_cpu_time,
-                inner_wall_time,
                 outer_cpu_time,
-                outer_wall_time
             )
 
             if verbose:
@@ -1662,7 +1640,6 @@ class BertsekasALM:
                 )
 
         total_time = time.process_time() - cpu_start_time
-        total_wall_time = time.time() - wall_start_time
 
         # Determine if truly converged vs stopped early
         # Only consider it converged if OD violation < gamma and x2 nonnegativity < gamma
@@ -1679,7 +1656,6 @@ class BertsekasALM:
             "outer_iterations": outer_iter + 1,
             "total_inner_iterations": sum(self.history["inner_iter"]),
             "elapsed_time": total_time,
-            "wall_elapsed_time": total_wall_time,
             "final_objective": result.fun,
             "final_metrics": metrics,
             "final_violations": (od_viol, minor_viol),
@@ -1951,11 +1927,9 @@ def run_threshold_sensitivity_analysis(
         total_vars = n_major + r
 
         svd_time = svd_dict["svd_time"]
-        # Fallback for compatibility
-        svd_wall_time = svd_dict.get("svd_wall_time", svd_time)
         if n_minor > 0:
             print(
-                f"  SVD: {n_minor} minor paths → {r} latent variables (compression: {compression_ratio:.2f}x, time: {svd_time:.3f}s CPU, {svd_wall_time:.3f}s wall)"
+                f"  SVD: {n_minor} minor paths → {r} latent variables (compression: {compression_ratio:.2f}x, time: {svd_time:.3f}s CPU)"
             )
         print(f"  Total decision variables: {total_vars} (vs {n_total} original paths)")
 
@@ -1975,7 +1949,6 @@ def run_threshold_sensitivity_analysis(
             )
 
             opt_cpu_start = time.process_time()
-            opt_wall_start = time.time()
 
             result = optimizer.optimize(
                 max_outer_iter=20,
@@ -1984,7 +1957,6 @@ def run_threshold_sensitivity_analysis(
                 stagnation_window=3,
             )
             opt_cpu_time = time.process_time() - opt_cpu_start
-            opt_wall_time = time.time() - opt_wall_start
 
             final_metrics = result["final_metrics"]
             viol = result["final_violations"]
@@ -1997,16 +1969,6 @@ def run_threshold_sensitivity_analysis(
             )
             per_inner_cpu_time = (
                 opt_cpu_time / result["total_inner_iterations"]
-                if result["total_inner_iterations"] > 0
-                else 0.0
-            )
-            per_outer_wall_time = (
-                opt_wall_time / result["outer_iterations"]
-                if result["outer_iterations"] > 0
-                else 0.0
-            )
-            per_inner_wall_time = (
-                opt_wall_time / result["total_inner_iterations"]
                 if result["total_inner_iterations"] > 0
                 else 0.0
             )
@@ -2027,13 +1989,9 @@ def run_threshold_sensitivity_analysis(
                 "outer_iterations": result["outer_iterations"],
                 "total_inner_iterations": result["total_inner_iterations"],
                 "svd_time": svd_time,
-                "svd_wall_time": svd_wall_time,
                 "opt_cpu_time": opt_cpu_time,
-                "opt_wall_time": opt_wall_time,
                 "per_outer_cpu_time": per_outer_cpu_time,
                 "per_inner_cpu_time": per_inner_cpu_time,
-                "per_outer_wall_time": per_outer_wall_time,
-                "per_inner_wall_time": per_inner_wall_time,
                 "bpr_optimal": optimizer.bpr_optimal,
                 "bpr_pure": final_metrics["bpr_pure"],
                 "bpr_gap": final_metrics["bpr_gap"],
@@ -2165,13 +2123,13 @@ def print_summary(summary):
         f"    Travel Time R²: {summary['travel_time_r2']:.6f}, MAE: {summary['travel_time_mae']:.6f}"
     )
     print(
-        f"    Time: SVD={summary['svd_time']:.3f}s (CPU), {summary['svd_wall_time']:.3f}s (Wall)"
+        f"    Time: SVD={summary['svd_time']:.3f}s (CPU)"
     )
     print(
-        f"    Optimization: {summary['opt_cpu_time']:.2f}s (CPU), {summary['opt_wall_time']:.2f}s (Wall)"
+        f"    Optimization: {summary['opt_cpu_time']:.2f}s (CPU)"
     )
     print(
-        f"    Per-iteration: Outer={summary['per_outer_cpu_time']:.3f}s/{summary['per_outer_wall_time']:.3f}s, Inner={summary['per_inner_cpu_time']:.4f}s/{summary['per_inner_wall_time']:.4f}s (CPU/Wall)"
+        f"    Per-iteration: Outer={summary['per_outer_cpu_time']:.3f}s, Inner={summary['per_inner_cpu_time']:.4f}s (CPU)"
     )
     print(f"    Variables reduced by: {summary['reduction_pct']:.1f}%")
     print(f"    Speedup upper bound: {summary['speedup_ub']:.2f}x")
