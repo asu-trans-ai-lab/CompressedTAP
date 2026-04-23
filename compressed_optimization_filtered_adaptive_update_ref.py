@@ -1433,67 +1433,6 @@ class BertsekasALM:
 
         return False, None
 
-    # Feasibility check for (A1 x1 + M theta = d) with nonnegativity constraints
-
-    def solve_compressed_tap(self, alpha=0.15, beta=4.0):
-        """
-        Solve the compressed TAP using CVXPY.
-        
-        Note: Uses d_multi (multi-path ODs only) for OD conservation.
-        Singleton OD conservation is satisfied by construction.
-        Link flows include constant v_singleton contribution.
-        
-        Args:
-            alpha, beta: BPR parameters
-        Returns:
-            x1, theta: optimal major and latent flows
-            v: optimal link flows (including singleton contribution)
-        """
-        s = self.B1.shape[0]
-        r = self.D.shape[1]
-        x1 = cp.Variable(s)
-
-        # set up initial values for x1
-        _, x1_ref, _, _ = self.initialize_solution(
-            enable_warm_start=False, enable_proportional_cold_start=True
-        )
-        x1.value = x1_ref
-
-        if self.r > 0:
-            theta = cp.Variable(r)
-            # Compute link flows: v = v_singleton + B1^T @ x1 + D @ theta
-            if self.v_singleton is not None:
-                v = self.v_singleton + self.B1.T @ x1 + self.B2.T @ (self.U_r @ theta)
-            else:
-                v = self.B1.T @ x1 + self.B2.T @ (self.U_r @ theta)
-            # OD conservation: A1 x1 + A2*(U_r@theta) == d_multi (multi-path ODs only)
-            constraints = [self.A1 @ x1 + self.A2 @ (self.U_r @ theta) == self.d_multi, x1 >= 0, self.U_r @ theta >= 0]
-        else:
-            theta = None
-            # Compute link flows: v = v_singleton + B1^T @ x1
-            if self.v_singleton is not None:
-                v = self.v_singleton + self.B1.T @ x1
-            else:
-                v = self.B1.T @ x1
-            # OD conservation: A1 x1 == d_multi (multi-path ODs only)
-            constraints = [self.A1 @ x1 == self.d_multi, x1 >= 0]
-
-        # Beckmann objective (sum over links)
-        obj = cp.sum(self.t_0 * self.capacity * alpha / (beta + 1) * cp.power(v / self.capacity, beta + 1))
-        prob = cp.Problem(cp.Minimize(obj), constraints)
-        prob.solve(solver=cp.ECOS, warm_start=True, verbose=True)
-
-        print(f"Compressed TAP status: {prob.status}")
-        print(f"Compressed TAP optimal value: {prob.value:.4e}")
-
-        return {
-            "status": prob.status,
-            "x1": x1.value,
-            "theta": theta.value if theta is not None else None,
-            "v": v.value,
-            "objective": prob.value
-        }
-
     def update_history(
         self,
         outer_iter,
@@ -2322,114 +2261,6 @@ def print_summary_table(results_df):
         )
 
 
-def print_recommendations(results_df):
-    print("\n" + "=" * 101)
-    print(" RECOMMENDATIONS")
-    print("=" * 101)
-
-    best_quality = results_df.loc[results_df["x_weighted_r2"].idxmax()]
-    best_balanced = (
-        results_df.loc[
-            (results_df["x_weighted_r2"] > 0.999) & (results_df["reduction_pct"] > 50)
-        ].iloc[0]
-        if len(
-            results_df[
-                (results_df["x_weighted_r2"] > 0.999)
-                & (results_df["reduction_pct"] > 50)
-            ]
-        )
-        > 0
-        else best_quality
-    )
-
-    print(f"\n  Best Quality: Threshold = {best_quality['threshold']:.0f}")
-    print(f"    Weighted R²: {best_quality['x_weighted_r2']:.6f}")
-    print(f"    Reduction: {best_quality['reduction_pct']:.1f}%")
-    print(f"    Time: {best_quality['opt_cpu_time']:.2f}s")
-
-    print(f"\n  Recommended (balanced): Threshold = {best_balanced['threshold']:.0f}")
-    print(f"    Weighted R²: {best_balanced['x_weighted_r2']:.6f}")
-    print(f"    Reduction: {best_balanced['reduction_pct']:.1f}%")
-    print(f"    Time: {best_balanced['opt_cpu_time']:.2f}s")
-
-
-def run_constrained_optimization(B, x_ref, v_ref, capacity, t_0, od_info, thresholds, mode="feasibility"):
-    print("\n" + "=" * 101)
-    print(" CONSTRAINED OPTIMIZATION")
-    print("=" * 101)
-
-    prev_config = None
-
-    for i, threshold in enumerate(thresholds):
-        print(f"\n[{i + 1}/{len(thresholds)}] Testing threshold = {threshold}")
-        print("-" * 100)
-
-        # Decompose with this threshold
-        decomp = decompose_paths(B, x_ref, od_info, threshold)
-
-        n_major = decomp["s"]
-        n_minor = decomp["n_minor"]
-
-        # Handle special case: no minor paths (when threshold is 0 or very low, all paths become major)
-        if n_minor == 0:
-            print(
-                "      No minor paths - running optimization with major paths only (no SVD compression)"
-            )
-            # Create empty svd_dict for compatibility
-            svd_dict = {
-                "U_r": csr_matrix((0, 0), dtype=np.float64),
-                "D": csr_matrix((0, 0), dtype=np.float64),
-                "theta_ref": np.array([], dtype=np.float64),
-                "r": 0,
-                "compression_ratio": float("inf"),
-                "explained_variance_ratio": 1.0,
-                "reconstruction_error": 0.0,
-                "svd_time": 0.0,
-            }
-        else:
-            # SVD compression for minor paths
-            svd_dict = compute_svd_compression(
-                decomp["B2"], decomp["x2_ref"], max_rank=rank
-            )
-            if svd_dict is None:
-                print(f"   SVD compression failed - skipping threshold {threshold}")
-                continue
-
-        # Check if configuration is same as previous iteration
-        current_config = (n_major, n_minor)
-        if prev_config is not None and current_config == prev_config:
-            print(
-                f"     Skipping: Same configuration as previous threshold (n_major={n_major}, n_minor={n_minor})"
-            )
-            print(
-                "     This threshold produces identical decomposition - results would be the same"
-            )
-            continue
-
-        # Update for next iteration
-        prev_config = current_config
-
-        try:
-            optimizer = BertsekasALM(
-                decomp,
-                svd_dict,
-                capacity,
-                t_0,
-                od_info,
-                v_ref,
-                rho_od_init=1e2,
-                rho_nonneg_minor_init=1e2,
-                tau=10.0,
-                gamma=gamma,
-            )
-            if mode.startswith("tap"):
-                print("  Running compressed TAP optimization...")
-                optimizer.solve_compressed_tap()
-        except Exception as e:
-            print(f"    Optimization failed: {e}")
-            continue
-
-
 ################################################################################
 # MAIN
 ################################################################################
@@ -2443,8 +2274,8 @@ if __name__ == "__main__":
 
     # data_dir = '09_Chicago_Regional'
     # data_dir = "10_Chicago_Sketch/TAPLite/2x"
-    # data_dir = "10_Chicago_Sketch"
-    data_dir = "12_Philadelphia"
+    data_dir = "chicago_sketch"
+    # data_dir = "12_Philadelphia"
     # data_dir = "sioux_falls"
 
     link_file = f"data/{data_dir}/link.csv"
@@ -2454,7 +2285,7 @@ if __name__ == "__main__":
     route_file = f"data/{data_dir}/columns.csv"
     # demand_file = f"data/{data_dir}/demand.csv"
     demand_file = None  # No demand file provided
-    output_dir = f"./alm_260307/{data_dir}/rank{rank}"
+    output_dir = f"./test/{data_dir}/rank{rank}"
 
     if len(sys.argv) > 1:
         link_file = sys.argv[1]
@@ -2468,13 +2299,7 @@ if __name__ == "__main__":
         link_perf_file = sys.argv[5]
 
     print("\n" + "=" * 101)
-    if mode.lower().startswith("tap"):
-        print(" COMPRESSED TAP OPTIMIZATION")
-    elif mode.lower().startswith("alm"):
-        print(" THRESHOLD SENSITIVITY ANALYSIS FOR BERTSEKAS ALM")
-    else:
-        print(" UNKNOWN MODE - EXITING")
-        sys.exit(1)
+    print(" COMPRESSED TAP OPTIMIZATION")
     print("=" * 101)
 
     # Load data
@@ -2482,20 +2307,11 @@ if __name__ == "__main__":
         link_file, route_file, demand_file, link_perf_file
     )
     thresholds = setup_thresholds(x_ref, od_info)
-    # thresholds = [0.000000, 0.134077, 0.166642, 0.204017, 0.249387, 0.307814, 0.386967, 0.501303, 0.698129, 1.141050, 390.345000]
-    # thresholds = [0.000000, 0.134077, 0.166642, 0.204017, 0.249387, 0.307814, 0.386967, 0.501303, 0.698129, 1.141050, 390.345000]
 
-    if mode.lower().startswith("tap"):
-        # Run TAP optimization
-        run_constrained_optimization(B, x_ref, v_ref, capacity, t_0, od_info, thresholds, mode=mode.lower())
-    else:
-        # Run threshold sensitivity analysis
-        results_df = run_threshold_sensitivity_analysis(
-            B, x_ref, v_ref, capacity, t_0, od_info, output_dir, rank, thresholds, gamma
-        )
-
-        # Print recommendations
-        # print_recommendations(results_df)
+    # Run threshold sensitivity analysis
+    results_df = run_threshold_sensitivity_analysis(
+        B, x_ref, v_ref, capacity, t_0, od_info, output_dir, rank, thresholds, gamma
+    )
 
     print("\n" + "=" * 101)
     print(" COMPLETE")
