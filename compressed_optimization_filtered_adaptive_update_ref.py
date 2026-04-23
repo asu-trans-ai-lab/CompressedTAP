@@ -632,27 +632,9 @@ class BertsekasALM:
         self.bpr_optimal = bpr_objective(v_ref, capacity, t_0, alpha, beta)
 
         self.history = {
-            "outer_iter": [],
             "inner_iter": [],
-            "objective": [],
             "bpr_pure": [],
-            "bpr_optimal": [],
-            "bpr_gap": [],
-            "bpr_gap_pct": [],
-            "rho_od": [],
-            "rho_nonneg_minor": [],
             "od_violation": [],
-            "nonneg_minor_violation": [],
-            "link_r2": [],
-            "link_mae": [],
-            "x1_r2": [],
-            "x1_mae": [],
-            "x2_r2": [],
-            "x2_mae": [],
-            "travel_time_r2": [],
-            "travel_time_mae": [],
-            "inner_time": [],
-            "outer_time": [],
         }
 
     def objective_and_gradient_chain_rule(self, z):
@@ -1388,35 +1370,13 @@ class BertsekasALM:
 
     def update_history(
         self,
-        outer_iter,
         result,
         metrics,
-        od_viol,
-        minor_viol,
-        inner_cpu_time,
-        outer_cpu_time,
+        od_viol
     ):
-        self.history["outer_iter"].append(outer_iter)
         self.history["inner_iter"].append(result.nit)
-        self.history["objective"].append(result.fun)
         self.history["bpr_pure"].append(metrics["bpr_pure"])
-        self.history["bpr_optimal"].append(self.bpr_optimal)
-        self.history["bpr_gap"].append(metrics["bpr_gap"])
-        self.history["bpr_gap_pct"].append(metrics["bpr_gap_pct"])
-        self.history["rho_od"].append(self.rho_od)
-        self.history["rho_nonneg_minor"].append(self.rho_nonneg_minor)
         self.history["od_violation"].append(od_viol)
-        self.history["nonneg_minor_violation"].append(minor_viol)
-        self.history["link_r2"].append(metrics["link_r2"])
-        self.history["link_mae"].append(metrics["link_mae"])
-        self.history["x1_r2"].append(metrics["x1_r2"])
-        self.history["x1_mae"].append(metrics["x1_mae"])
-        self.history["x2_r2"].append(metrics["x2_r2"])
-        self.history["x2_mae"].append(metrics["x2_mae"])
-        self.history["travel_time_r2"].append(metrics["travel_time_r2"])
-        self.history["travel_time_mae"].append(metrics["travel_time_mae"])
-        self.history["inner_time"].append(inner_cpu_time)
-        self.history["outer_time"].append(outer_cpu_time)
 
     def initialize_solution(
         self, enable_warm_start=False, enable_proportional_cold_start=True
@@ -1570,13 +1530,9 @@ class BertsekasALM:
 
             metrics = self.compute_metrics(x1, theta, v)
             self.update_history(
-                outer_iter,
                 result,
                 metrics,
-                od_viol,
-                minor_viol,
-                inner_cpu_time,
-                outer_cpu_time,
+                od_viol
             )
 
             if verbose:
@@ -1621,7 +1577,6 @@ class BertsekasALM:
             "final_objective": result.fun,
             "final_metrics": metrics,
             "final_violations": (od_viol, minor_viol),
-            "history": self.history,
         }
 
 
