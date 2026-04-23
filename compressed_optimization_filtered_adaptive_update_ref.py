@@ -6,10 +6,10 @@ Threshold Sensitivity Analysis for ALM with KKT Projection Gradient (FILTERED VE
 - FILTERED: d_multi excludes singleton ODs entirely (dimension reduction)
 
 GRADIENT FORMULA (Corrected):
-∇_{y} L = B1^T ∇_v f_BPR + A1^T(λ_od + ρ_od·od_error) - max{0, λ_major - ρ_major·y}
-∇_θ L = D^T ∇_v f_BPR + M^T(λ_od + ρ_od·od_error) - U_r^T max{0, λ_minor - ρ_minor·w}
+∇_{y} L = B1^T ∇_v f_BPR + A1^T(λ_od + c1·od_error) - max{0, mu - c2·y}
+∇_z L = D^T ∇_v f_BPR + M^T(λ_od + c1·od_error) - U_r^T max{0, mu - mu·w}
 
-Key change: Uses max{0, λ - ρ·x} instead of (λ + ρ·violation)·mask
+Key change: Uses max{0, λ - c·x} instead of (λ + c·violation)·mask
 """
 
 import os
@@ -424,7 +424,7 @@ def compute_svd_compression(
             "U_r": csr_matrix((0, 0), dtype=np.float64),
             "V_r": csr_matrix((0, 0), dtype=np.float64),
             "sigma": np.array([], dtype=np.float64),
-            "theta_ref": np.array([], dtype=np.float64),
+            "z_ref": np.array([], dtype=np.float64),
             "r": 0,
             "compression_ratio": float("inf"),
             "explained_variance_ratio": 1.0,
@@ -483,7 +483,7 @@ def compute_svd_compression(
 
         print("  Sparse SVD completed successfully")
 
-    theta_ref = U_r.T @ w_ref
+    z_ref = U_r.T @ w_ref
 
     svd_cpu_time = time.process_time() - svd_cpu_start
 
@@ -493,7 +493,7 @@ def compute_svd_compression(
         "D": D,
         "sigma": sigma,
         "r": r,
-        "theta_ref": theta_ref,
+        "z_ref": z_ref,
         "svd_time": svd_cpu_time,
     }
 
@@ -526,10 +526,10 @@ class ALM:
         v_ref,
         alpha=0.15,
         beta=4.0,
-        rho_od_init=1e4,
-        rho_nonneg_minor_init=1e5,
-        tau=10.0,
-        gamma=0.1,
+        c1_init=1e4,
+        c2_init=1e5,
+        beta_penalty=10.0,
+        tolerance=0.1,
     ):
         self.B1 = decomp["B1"]
         # Ensure B2 exists; default to empty (n_minor x m_links) sparse matrix when missing
@@ -568,7 +568,7 @@ class ALM:
             )  # k × 0 matrix
             self.D = csr_matrix((self.B2.shape[0], 0), dtype=np.float64)  # m × 0 matrix
             self.r = 0
-            self.theta_ref = np.array([], dtype=np.float64)
+            self.z_ref = np.array([], dtype=np.float64)
         else:
             self.U_r = svd_dict["U_r"]
             self.V_r = svd_dict["V_r"]
@@ -576,7 +576,7 @@ class ALM:
             self.M = self.A2 @ self.U_r
             self.D = self.B2.T @ self.U_r
             self.r = svd_dict["r"]
-            self.theta_ref = svd_dict["theta_ref"]
+            self.z_ref = svd_dict["z_ref"]
 
         self.y_ref = decomp["y_ref"]
         self.w_ref = decomp["w_ref"]
@@ -626,11 +626,11 @@ class ALM:
         self.beta = beta
 
         # penalty vector for OD conservation
-        self.c1 = rho_od_init
+        self.c1 = c1_init
         # penalty vector for minor path non-negativity
-        self.c2 = rho_nonneg_minor_init
-        self.tau = tau
-        self.gamma = gamma
+        self.c2 = c2_init
+        self.beta_penalty = beta_penalty
+        self.tolerance = tolerance
         self.MAX_PENALTY = 1e20
 
         # Track previous violations for adaptive penalty updates
@@ -660,8 +660,8 @@ class ALM:
         max_outer_iter,
     ):
         # CONVERGENCE CHECK 1: Constraint satisfaction
-        if od_viol < self.gamma and minor_viol < self.gamma:
-            convergence_reason = f"viol < gamma={self.gamma}"
+        if od_viol < self.tolerance and minor_viol < self.tolerance:
+            convergence_reason = f"viol < gamma={self.tolerance}"
             return True, convergence_reason
 
         # CONVERGENCE CHECK 2: Stagnation detection
@@ -684,7 +684,7 @@ class ALM:
         # CONVERGENCE CHECK 3: Penalty maxed out (structural infeasibility)
         if self.c1 >= self.MAX_PENALTY:
             convergence_reason = (
-                f"Penalty maxed (ρ={self.c1:.0e}), OD violation is structural"
+                f"Penalty maxed (c={self.c1:.0e}), OD violation is structural"
             )
             return True, convergence_reason
 
@@ -786,7 +786,7 @@ class ALM:
 
         return od_violation, nonneg_minor_violation, u, od_flow
 
-    def get_od_violation_details(self, y, z, gamma):
+    def get_od_violation_details(self, y, z, tolerance):
         """Get detailed OD violation information for all OD pairs"""
         # Handle OD flow computation
         if self.r > 0:
@@ -809,8 +809,8 @@ class ALM:
         n_od = len(self.d_multi)
         max_abs_viol = np.max(od_errors)
         mean_abs_viol = np.mean(od_errors)
-        # Count OD pairs with absolute error > gamma
-        num_violated = np.sum(od_errors > gamma)
+        # Count OD pairs with absolute error > tolerance
+        num_violated = np.sum(od_errors > tolerance)
         # Overall MAE and RMSE
         od_mae = mean_abs_viol
 
@@ -933,12 +933,12 @@ class ALM:
             od_flow = self.A1 @ y
         od_error = od_flow - self.d_multi
 
-        # ALM terms for OD constraints: λ^T * g + ρ/2 * ||g||²
+        # ALM terms for OD constraints: λ^T * g + c/2 * ||g||²
         od_lagrangian = self.lambda_od.T @ od_error
         od_penalty = 0.5 * self.c1 * np.sum(od_error**2)
 
         # Non-negativity constraints for minor paths: U_r*θ ≥ 0 (only if minor paths exist)
-        # Formula (14): (1/2c) * {(max{0, γ - c·[U_r θ]})² - γ²}
+        # Formula (14): (1/2c) * {(max{0, γ - c·[U_r z]})² - γ²}
         if self.r > 0:
             max_term_minor = np.maximum(
                 0, self.mu - self.c2 * u
@@ -954,21 +954,21 @@ class ALM:
 
         # Gradients
         # Note: grad_v computed from v (which includes v_singleton)
-        # But ∂v_singleton/∂y = 0 and ∂v_singleton/∂θ = 0 (constant doesn't affect gradients)
+        # But ∂v_singleton/∂y = 0 and ∂v_singleton/∂z = 0 (constant doesn't affect gradients)
         grad_v = bpr_gradient(v, self.capacity, self.t_0, self.alpha, self.beta)
 
-        # Gradient w.r.t. y: ∂f/∂y = B1 @ grad_v + A1^T @ (λ + ρ*error)
+        # Gradient w.r.t. y: ∂f/∂y = B1 @ grad_v + A1^T @ (λ + c*error)
         grad_y = self.B1 @ grad_v
         grad_y += self.A1.T @ (self.lambda_od + self.c1 * od_error)
 
-        # Gradient w.r.t. θ (CORRECTED KKT PROJECTION FORMULA, only if minor paths exist)
+        # Gradient w.r.t. z (CORRECTED KKT PROJECTION FORMULA, only if minor paths exist)
         if self.r > 0:
-            # tmp = B2 @ grad_v  +  A2.T @ (lambda_od + rho_od * od_error)
+            # tmp = B2 @ grad_v  +  A2.T @ (lambda_od + c1 * od_error)
             tmp = self.B2 @ grad_v
             tmp += self.A2.T @ (self.lambda_od + self.c1 * od_error)
             # map back to z space
             grad_z = self.U_r.T @ tmp
-            # KKT projection gradient: -U_r^T max{0, λ_minor - ρ_minor·w}
+            # KKT projection gradient: -U_r^T max{0, mu - mu·w}
             grad_z -= self.U_r.T @ np.maximum(
                 0, self.mu - self.c2 * u
             )
@@ -982,7 +982,7 @@ class ALM:
     def objective_and_gradient_direct(self, x):
         """Compute augmented Lagrangian using direct M matrix multiplication
 
-        This version explicitly computes M*θ for OD flow calculation.
+        This version explicitly computes M*z for OD flow calculation.
         Useful when M is sparse and direct multiplication is efficient.
         """
         y = x[: self.s]
@@ -1001,7 +1001,7 @@ class ALM:
         # BPR objective
         f_bpr = bpr_objective(v, self.capacity, self.t_0, self.alpha, self.beta)
 
-        # OD conservation using direct M multiplication: A1*y + M*θ = d_multi
+        # OD conservation using direct M multiplication: A1*y + M*z = d_multi
         if self.r > 0:
             od_flow = self.A1 @ y + self.M @ z
         else:
@@ -1033,11 +1033,11 @@ class ALM:
         grad_y = self.B1 @ grad_v
         grad_y += self.A1.T @ (self.lambda_od + self.c1 * od_error)
 
-        # Gradient w.r.t. θ using direct M^T multiplication
+        # Gradient w.r.t. z using direct M^T multiplication
         if self.r > 0:
             # BPR gradient contribution: D^T @ grad_v
             grad_z = self.D.T @ grad_v
-            # OD constraint gradient using direct M^T: M^T @ (λ + ρ*error)
+            # OD constraint gradient using direct M^T: M^T @ (λ + c*error)
             grad_z += self.M.T @ (self.lambda_od + self.c1 * od_error)
             # KKT projection for non-negativity
             grad_z -= self.U_r.T @ np.maximum(
@@ -1053,7 +1053,7 @@ class ALM:
         """Direct objective/gradient with minor allocation reductions.
 
         Improvements vs objective_and_gradient_direct:
-        1. Reuse `dual_od = lambda_od + rho_od * od_error` in both y/z gradients.
+        1. Reuse `dual_od = lambda_od + c1 * od_error` in both y/z gradients.
         2. Reuse `max_term_minor` in both objective penalty and KKT projection gradient.
         """
         y = x[: self.s]
@@ -1072,7 +1072,7 @@ class ALM:
         # BPR objective
         f_bpr = bpr_objective(v, self.capacity, self.t_0, self.alpha, self.beta)
 
-        # OD conservation using direct M multiplication: A1*y + M*θ = d_multi
+        # OD conservation using direct M multiplication: A1*y + M*z = d_multi
         if self.r > 0:
             od_flow = self.A1 @ y + self.M @ z
         else:
@@ -1109,11 +1109,11 @@ class ALM:
         grad_y = self.B1 @ grad_v
         grad_y += self.A1.T @ dual_od
 
-        # Gradient w.r.t. θ using direct M^T multiplication
+        # Gradient w.r.t. z using direct M^T multiplication
         if self.r > 0:
             # BPR gradient contribution: D^T @ grad_v
             grad_z = self.D.T @ grad_v
-            # OD constraint gradient using direct M^T: M^T @ (λ + ρ*error)
+            # OD constraint gradient using direct M^T: M^T @ (λ + c*error)
             grad_z += self.M.T @ dual_od
             # KKT projection for non-negativity (reuse max_term_minor)
             grad_z -= self.U_r.T @ max_term_minor
@@ -1179,15 +1179,15 @@ class ALM:
         if self.r > 0:
             # Factored form: V_r @ (sigma * z) instead of chain rule
             # Preserves sparsity of V_r (critical for column_subset/random_projection)
-            theta_scaled = self.sigma * z  # Element-wise: O(r)
-            v += self.V_r @ theta_scaled  # Sparse matrix-vector: O(nnz(V_r))
+            z_scaled = self.sigma * z  # Element-wise: O(r)
+            v += self.V_r @ z_scaled  # Sparse matrix-vector: O(nnz(V_r))
             # Still need u for non-negativity constraint
             u = self.U_r @ z
 
         # BPR objective
         f_bpr = bpr_objective(v, self.capacity, self.t_0, self.alpha, self.beta)
 
-        # OD conservation: A1*y + M*θ = d_multi (using precomputed M)
+        # OD conservation: A1*y + M*z = d_multi (using precomputed M)
         if self.r > 0:
             od_flow = self.A1 @ y + self.M @ z
         else:
@@ -1219,12 +1219,12 @@ class ALM:
         grad_y = self.B1 @ grad_v
         grad_y += self.A1.T @ (self.lambda_od + self.c1 * od_error)
 
-        # Gradient w.r.t. θ (using factored form)
+        # Gradient w.r.t. z (using factored form)
         if self.r > 0:
             # BPR gradient: factored form diag(sigma) @ V_r^T @ grad_v
             # Element-wise scaling after sparse op
             grad_z = self.sigma * (self.V_r.T @ grad_v)
-            # OD constraint: M^T @ (λ + ρ*error)
+            # OD constraint: M^T @ (λ + c*error)
             grad_z += self.M.T @ (self.lambda_od + self.c1 * od_error)
             # KKT projection for non-negativity
             grad_z -= self.U_r.T @ np.maximum(
@@ -1272,8 +1272,8 @@ class ALM:
 
         if self.r > 0:
             # Factored form: V_r @ (sigma * z) - exploits V_r sparsity
-            theta_scaled = self.sigma * z
-            v += self.V_r @ theta_scaled
+            z_scaled = self.sigma * z
+            v += self.V_r @ z_scaled
             # Compute u for OD flow and non-negativity constraint
             u = self.U_r @ z
 
@@ -1396,7 +1396,7 @@ class ALM:
                 self.update_multipliers(
                     y, z, u_cached=u_cached, od_flow_cached=od_flow_cached
                 )
-                self.update_penalties(od_viol, minor_viol, eta=0.25)
+                self.update_penalties(od_viol, minor_viol, gamma=0.25)
 
             outer_cpu_time = time.process_time() - outer_cpu_start
 
@@ -1430,8 +1430,8 @@ class ALM:
                 break
 
         # Determine if truly converged vs stopped early
-        # Only consider it converged if OD violation < gamma and w nonnegativity < gamma
-        truly_converged = od_viol < self.gamma and minor_viol < self.gamma
+        # Only consider it converged if OD violation < tolerance and w nonnegativity < tolerance
+        truly_converged = od_viol < self.tolerance and minor_viol < self.tolerance
 
         return {
             "y": y,
@@ -1467,7 +1467,7 @@ class ALM:
             else:
                 od_flow = self.A1 @ y
 
-        # Standard ALM update for OD conservation: λ^(k+1) = λ^k + ρ*(od_flow - d)
+        # Standard ALM update for OD conservation: λ^(k+1) = λ^k + c*(od_flow - d)
         od_error = od_flow - self.d_multi
         self.lambda_od += self.c1 * od_error
 
@@ -1477,33 +1477,33 @@ class ALM:
                 0, self.mu - self.c2 * self.w
             )
 
-    def update_penalties(self, od_viol, minor_viol, eta=0.25):
+    def update_penalties(self, od_viol, minor_viol, gamma=0.25):
         """Adaptive penalty update: only increase if violation doesn't decrease sufficiently
 
         Args:
             od_viol: Current OD constraint violation
             minor_viol: Current minor path non-negativity violation
-            eta: Reduction factor threshold (default 0.25)
-                 Increase penalty only if current_viol > eta * previous_viol
+            gamma: Reduction factor threshold (default 0.25)
+                 Increase penalty only if current_viol > gamma * previous_viol
         """
         # OD constraint penalty
-        if od_viol >= self.gamma:
+        if od_viol >= self.tolerance:
             # Check if violation decreased sufficiently
-            if self.prev_od_viol is None or od_viol > eta * self.prev_od_viol:
+            if self.prev_od_viol is None or od_viol > gamma * self.prev_od_viol:
                 # Violation didn't decrease enough, increase penalty
-                self.c1 = min(self.c1 * self.tau, self.MAX_PENALTY)
+                self.c1 = min(self.c1 * self.beta_penalty, self.MAX_PENALTY)
             # else: keep penalty the same (violation decreased sufficiently)
 
         # Store current violation for next iteration
         self.prev_od_viol = od_viol
 
         # Minor path non-negativity penalty
-        if minor_viol >= self.gamma:
+        if minor_viol >= self.tolerance:
             # Check if violation decreased sufficiently
-            if self.prev_minor_viol is None or minor_viol > eta * self.prev_minor_viol:
+            if self.prev_minor_viol is None or minor_viol > gamma * self.prev_minor_viol:
                 # Violation didn't decrease enough, increase penalty
                 self.c2 = min(
-                    self.c2 * self.tau, self.MAX_PENALTY
+                    self.c2 * self.beta_penalty, self.MAX_PENALTY
                 )
             # else: keep penalty the same (violation decreased sufficiently)
 
@@ -1725,7 +1725,7 @@ def build_threshold_summary(
     opt_cpu_time,
     optimizer,
     result,
-    gamma,
+    tolerance,
 ):
     """Build the result summary payload for one threshold run."""
     final_metrics = result["final_metrics"]
@@ -1775,7 +1775,7 @@ def build_threshold_summary(
         "w_mae": final_metrics["w_mae"],
         "travel_time_r2": final_metrics["travel_time_r2"],
         "travel_time_mae": final_metrics["travel_time_mae"],
-        "converged": (viol[0] < gamma and viol[1] < gamma),
+        "converged": (viol[0] < tolerance and viol[1] < tolerance),
         "convergence_reason": result["convergence_reason"],
     }
 
@@ -1790,7 +1790,7 @@ def compute_svd_for_threshold(decomp, n_minor, rank, threshold):
         return {
             "U_r": csr_matrix((0, 0), dtype=np.float64),
             "D": csr_matrix((0, 0), dtype=np.float64),
-            "theta_ref": np.array([], dtype=np.float64),
+            "z_ref": np.array([], dtype=np.float64),
             "r": 0,
             "compression_ratio": float("inf"),
             "explained_variance_ratio": 1.0,
@@ -1806,7 +1806,7 @@ def compute_svd_for_threshold(decomp, n_minor, rank, threshold):
 
 
 def run_threshold_sensitivity_analysis(
-    B, x_ref, v_ref, capacity, t_0, od_info, output_dir, rank, thresholds, gamma=0.1
+    B, x_ref, v_ref, capacity, t_0, od_info, output_dir, rank, thresholds, tolerance=0.1
 ):
     """
     Run threshold sensitivity analysis
@@ -1821,7 +1821,7 @@ def run_threshold_sensitivity_analysis(
     output_dir.mkdir(exist_ok=True, parents=True)
 
     print("\n" + "=" * 101)
-    print(f" THRESHOLD SENSITIVITY ANALYSIS with GAMMA = {gamma}")
+    print(f" THRESHOLD SENSITIVITY ANALYSIS with Tolerance = {tolerance}")
     print("=" * 101)
 
     results = []
@@ -1869,10 +1869,10 @@ def run_threshold_sensitivity_analysis(
                 t_0,
                 od_info,
                 v_ref,
-                rho_od_init=1e3,
-                rho_nonneg_minor_init=1e3,
-                tau=4.0,
-                gamma=gamma,
+                c1_init=1e3,
+                c2_init=1e3,
+                beta_penalty=4.0,
+                tolerance=tolerance,
             )
 
             opt_cpu_start = time.process_time()
@@ -1887,7 +1887,7 @@ def run_threshold_sensitivity_analysis(
             opt_cpu_time = time.process_time() - opt_cpu_start
 
             print_link_volume_analysis(result, v_ref, capacity)
-            print_od_violation_analysis(optimizer, result, gamma)
+            print_od_violation_analysis(optimizer, result, tolerance)
 
             summary = build_threshold_summary(
                 r=r,
@@ -1905,7 +1905,7 @@ def run_threshold_sensitivity_analysis(
                 opt_cpu_time=opt_cpu_time,
                 optimizer=optimizer,
                 result=result,
-                gamma=gamma,
+                tolerance=tolerance,
             )
 
             results.append(summary)
