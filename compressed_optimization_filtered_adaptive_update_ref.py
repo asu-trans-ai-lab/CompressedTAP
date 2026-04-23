@@ -651,7 +651,6 @@ class BertsekasALM:
             "x2_mae": [],
             "travel_time_r2": [],
             "travel_time_mae": [],
-            "elapsed_time": [],
             "inner_time": [],
             "outer_time": [],
         }
@@ -1394,7 +1393,6 @@ class BertsekasALM:
         metrics,
         od_viol,
         minor_viol,
-        cpu_elapsed,
         inner_cpu_time,
         outer_cpu_time,
     ):
@@ -1417,7 +1415,6 @@ class BertsekasALM:
         self.history["x2_mae"].append(metrics["x2_mae"])
         self.history["travel_time_r2"].append(metrics["travel_time_r2"])
         self.history["travel_time_mae"].append(metrics["travel_time_mae"])
-        self.history["elapsed_time"].append(cpu_elapsed)
         self.history["inner_time"].append(inner_cpu_time)
         self.history["outer_time"].append(outer_cpu_time)
 
@@ -1505,7 +1502,6 @@ class BertsekasALM:
     ):
         """Run Bertsekas ALM with KKT projection and stagnation detection"""
         verbose = True
-        cpu_start_time = time.process_time()
 
         convergence_reason = "Max iterations reached"
 
@@ -1562,8 +1558,6 @@ class BertsekasALM:
 
             outer_cpu_time = time.process_time() - outer_cpu_start
 
-            cpu_elapsed = time.process_time() - cpu_start_time
-
             # Compute link volumes using cached u to avoid recomputing U_r @ theta
             if self.v_singleton is not None:
                 v = self.v_singleton + self.B1.T @ x1
@@ -1581,7 +1575,6 @@ class BertsekasALM:
                 metrics,
                 od_viol,
                 minor_viol,
-                cpu_elapsed,
                 inner_cpu_time,
                 outer_cpu_time,
             )
@@ -1611,8 +1604,6 @@ class BertsekasALM:
                     f"  Final: OD viol={od_viol:.4f}, Link R²={metrics['link_r2']:.4f}, BPR gap={metrics['bpr_gap_pct']:.2f}%"
                 )
 
-        total_time = time.process_time() - cpu_start_time
-
         # Determine if truly converged vs stopped early
         # Only consider it converged if OD violation < gamma and x2 nonnegativity < gamma
         truly_converged = od_viol < self.gamma and minor_viol < self.gamma
@@ -1627,7 +1618,6 @@ class BertsekasALM:
             "convergence_reason": convergence_reason,
             "outer_iterations": outer_iter + 1,
             "total_inner_iterations": sum(self.history["inner_iter"]),
-            "elapsed_time": total_time,
             "final_objective": result.fun,
             "final_metrics": metrics,
             "final_violations": (od_viol, minor_viol),
