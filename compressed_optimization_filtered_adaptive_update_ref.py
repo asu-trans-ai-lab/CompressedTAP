@@ -1807,6 +1807,77 @@ def setup_thresholds(x_ref, od_info=None, num_bins=11):
     return thresholds
 
 
+def build_threshold_summary(
+    threshold,
+    n_major,
+    n_minor,
+    major_pct,
+    major_flow,
+    minor_flow,
+    major_flow_pct,
+    r,
+    compression_ratio,
+    total_vars,
+    n_total,
+    svd_time,
+    opt_cpu_time,
+    optimizer,
+    result,
+    gamma,
+):
+    """Build the result summary payload for one threshold run."""
+    final_metrics = result["final_metrics"]
+    viol = result["final_violations"]
+
+    per_outer_cpu_time = (
+        opt_cpu_time / result["outer_iterations"]
+        if result["outer_iterations"] > 0
+        else 0.0
+    )
+    per_inner_cpu_time = (
+        opt_cpu_time / result["total_inner_iterations"]
+        if result["total_inner_iterations"] > 0
+        else 0.0
+    )
+
+    return {
+        "threshold": threshold,
+        "n_major": n_major,
+        "n_minor": n_minor,
+        "major_pct": major_pct,
+        "major_flow": major_flow,
+        "minor_flow": minor_flow,
+        "major_flow_pct": major_flow_pct,
+        "svd_rank": r,
+        "compression_ratio": compression_ratio,
+        "total_vars": total_vars,
+        "reduction_pct": 100 * (1 - total_vars / n_total),
+        "speedup_ub": n_total / total_vars,
+        "outer_iterations": result["outer_iterations"],
+        "total_inner_iterations": result["total_inner_iterations"],
+        "svd_time": svd_time,
+        "opt_cpu_time": opt_cpu_time,
+        "per_outer_cpu_time": per_outer_cpu_time,
+        "per_inner_cpu_time": per_inner_cpu_time,
+        "bpr_optimal": optimizer.bpr_optimal,
+        "bpr_pure": final_metrics["bpr_pure"],
+        "bpr_gap": final_metrics["bpr_gap"],
+        "bpr_gap_pct": final_metrics["bpr_gap_pct"],
+        "od_violation": viol[0],
+        "nonneg_minor_violation": viol[1],
+        "link_r2": final_metrics["link_r2"],
+        "link_mae": final_metrics["link_mae"],
+        "x1_r2": final_metrics["x1_r2"],
+        "x1_mae": final_metrics["x1_mae"],
+        "x2_r2": final_metrics["x2_r2"],
+        "x2_mae": final_metrics["x2_mae"],
+        "travel_time_r2": final_metrics["travel_time_r2"],
+        "travel_time_mae": final_metrics["travel_time_mae"],
+        "converged": (viol[0] < gamma and viol[1] < gamma),
+        "convergence_reason": result["convergence_reason"],
+    }
+
+
 def run_threshold_sensitivity_analysis(
     B, x_ref, v_ref, capacity, t_0, od_info, output_dir, rank, thresholds, gamma=0.1
 ):
@@ -1930,63 +2001,30 @@ def run_threshold_sensitivity_analysis(
             )
             opt_cpu_time = time.process_time() - opt_cpu_start
 
-            final_metrics = result["final_metrics"]
-            viol = result["final_violations"]
+            print_link_volume_analysis(result, v_ref, capacity)
+            print_od_violation_analysis(optimizer, result, gamma)
 
-            # Calculate per-iteration timing metrics
-            per_outer_cpu_time = (
-                opt_cpu_time / result["outer_iterations"]
-                if result["outer_iterations"] > 0
-                else 0.0
+            summary = build_threshold_summary(
+                threshold=threshold,
+                n_major=n_major,
+                n_minor=n_minor,
+                major_pct=major_pct,
+                major_flow=major_flow,
+                minor_flow=minor_flow,
+                major_flow_pct=major_flow_pct,
+                r=r,
+                compression_ratio=compression_ratio,
+                total_vars=total_vars,
+                n_total=n_total,
+                svd_time=svd_time,
+                opt_cpu_time=opt_cpu_time,
+                optimizer=optimizer,
+                result=result,
+                gamma=gamma,
             )
-            per_inner_cpu_time = (
-                opt_cpu_time / result["total_inner_iterations"]
-                if result["total_inner_iterations"] > 0
-                else 0.0
-            )
-
-            summary = {
-                "threshold": threshold,
-                "n_major": n_major,
-                "n_minor": n_minor,
-                "major_pct": major_pct,
-                "major_flow": major_flow,
-                "minor_flow": minor_flow,
-                "major_flow_pct": major_flow_pct,
-                "svd_rank": r,
-                "compression_ratio": compression_ratio,
-                "total_vars": total_vars,
-                "reduction_pct": 100 * (1 - total_vars / n_total),
-                "speedup_ub": n_total / total_vars,
-                "outer_iterations": result["outer_iterations"],
-                "total_inner_iterations": result["total_inner_iterations"],
-                "svd_time": svd_time,
-                "opt_cpu_time": opt_cpu_time,
-                "per_outer_cpu_time": per_outer_cpu_time,
-                "per_inner_cpu_time": per_inner_cpu_time,
-                "bpr_optimal": optimizer.bpr_optimal,
-                "bpr_pure": final_metrics["bpr_pure"],
-                "bpr_gap": final_metrics["bpr_gap"],
-                "bpr_gap_pct": final_metrics["bpr_gap_pct"],
-                "od_violation": viol[0],
-                "nonneg_minor_violation": viol[1],
-                "link_r2": final_metrics["link_r2"],
-                "link_mae": final_metrics["link_mae"],
-                "x1_r2": final_metrics["x1_r2"],
-                "x1_mae": final_metrics["x1_mae"],
-                "x2_r2": final_metrics["x2_r2"],
-                "x2_mae": final_metrics["x2_mae"],
-                "travel_time_r2": final_metrics["travel_time_r2"],
-                "travel_time_mae": final_metrics["travel_time_mae"],
-                "converged": (viol[0] < gamma and viol[1] < gamma),
-                "convergence_reason": result["convergence_reason"],
-            }
 
             results.append(summary)
             print_summary(summary)
-
-            print_link_volume_analysis(result, v_ref, capacity)
-            print_od_violation_analysis(optimizer, result, gamma)
 
         except Exception as e:
             print(f"    Optimization failed: {e}")
