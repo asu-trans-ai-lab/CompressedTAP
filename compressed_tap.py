@@ -541,11 +541,11 @@ class ALM:
             singleton_ods = np.unique([path_to_od[i] for i in singleton_indices])
             d_singleton = od_info["od_demand"][singleton_ods]
             # Pre-compute constant singleton contribution to link flows
-            self.v_singleton = self.B_singleton.T @ d_singleton
+            self.v_0 = self.B_singleton.T @ d_singleton
         else:
             self.B_singleton = None
             self.A_singleton = None
-            self.v_singleton = None
+            self.v_0 = None
 
         # Handle case where there are no minor paths (n_minor == 0)
         if svd_dict is None or decomp["n_minor"] == 0:
@@ -900,10 +900,10 @@ class ALM:
         y = x[: self.s]
         z = x[self.s :] if self.r > 0 else np.array([], dtype=np.float64)
 
-        # Compute link volumes: v = v_singleton + B1^T y + B2^T @ (U_r @ z)
-        # v_singleton is a constant (pre-computed in __init__)
-        if self.v_singleton is not None:
-            v = self.v_singleton + self.B1.T @ y
+        # Compute link volumes: v = v_0 + B1^T y + B2^T @ (U_r @ z)
+        # v_0 is a constant (pre-computed in __init__)
+        if self.v_0 is not None:
+            v = self.v_0 + self.B1.T @ y
         else:
             v = self.B1.T @ y
 
@@ -912,7 +912,7 @@ class ALM:
             u = self.U_r @ z
             v += self.B2.T.dot(u)
 
-        # BPR objective (v includes constant v_singleton contribution)
+        # BPR objective (v includes constant v_0 contribution)
         f_bpr = bpr_objective(v, self.capacity, self.t_0, self.alpha, self.beta)
 
         # OD conservation: A1*y + A2*(U_r@z) = d_multi (only multi-path ODs)
@@ -941,8 +941,8 @@ class ALM:
         total_obj = f_bpr + od_lagrangian + od_penalty + minor_penalty_term
 
         # Gradients
-        # Note: grad_v computed from v (which includes v_singleton)
-        # But ∂v_singleton/∂y = 0 and ∂v_singleton/∂z = 0 (constant doesn't affect gradients)
+        # Note: grad_v computed from v (which includes v_0)
+        # But ∂v_0/∂y = 0 and ∂v_0/∂z = 0 (constant doesn't affect gradients)
         grad_v = bpr_gradient(v, self.capacity, self.t_0, self.alpha, self.beta)
 
         # Gradient w.r.t. y: ∂f/∂y = B1 @ grad_v + A1^T @ (lambda_od + c1*error)
@@ -975,8 +975,8 @@ class ALM:
         z = x[self.s :] if self.r > 0 else np.array([], dtype=np.float64)
 
         # Compute link volumes
-        if self.v_singleton is not None:
-            v = self.v_singleton + self.B1.T @ y
+        if self.v_0 is not None:
+            v = self.v_0 + self.B1.T @ y
         else:
             v = self.B1.T @ y
 
@@ -1042,8 +1042,8 @@ class ALM:
         z = x[self.s :] if self.r > 0 else np.array([], dtype=np.float64)
 
         # Compute link volumes
-        if self.v_singleton is not None:
-            v = self.v_singleton + self.B1.T @ y
+        if self.v_0 is not None:
+            v = self.v_0 + self.B1.T @ y
         else:
             v = self.B1.T @ y
 
@@ -1152,9 +1152,9 @@ class ALM:
         y = x[: self.s]
         z = x[self.s :] if self.r > 0 else np.array([], dtype=np.float64)
 
-        # Compute link volumes: v = v_singleton + B1^T y + V_r @ (sigma * z)
-        if self.v_singleton is not None:
-            v = self.v_singleton + self.B1.T @ y
+        # Compute link volumes: v = v_0 + B1^T y + V_r @ (sigma * z)
+        if self.v_0 is not None:
+            v = self.v_0 + self.B1.T @ y
         else:
             v = self.B1.T @ y
 
@@ -1243,8 +1243,8 @@ class ALM:
         z = x[self.s :] if self.r > 0 else np.array([], dtype=np.float64)
 
         # Compute link volumes using FACTORED FORM (sparse-friendly)
-        if self.v_singleton is not None:
-            v = self.v_singleton + self.B1.T @ y
+        if self.v_0 is not None:
+            v = self.v_0 + self.B1.T @ y
         else:
             v = self.B1.T @ y
 
@@ -1373,8 +1373,8 @@ class ALM:
             outer_cpu_time = time.process_time() - outer_cpu_start
 
             # Compute link volumes using cached u to avoid recomputing U_r @ z
-            if self.v_singleton is not None:
-                v = self.v_singleton + self.B1.T @ y
+            if self.v_0 is not None:
+                v = self.v_0 + self.B1.T @ y
             else:
                 v = self.B1.T @ y
 

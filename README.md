@@ -1,0 +1,126 @@
+# Compressed Traffic Assignment with Augmented Lagrangian Method
+
+This repository contains the reference implementation for the submitted manuscript:  **"Compressed Traffic Assignment with Augmented Lagrangian Method"**.
+
+## Gradient Computation: Paper vs. Implementation
+
+### Augmented Lagrangian
+
+The augmented Lagrangian is (eq. 3):
+
+$$
+L_c(y,z,\lambda,\mu) = \hat{f}(y,z) + \lambda'(A_1 y + Mz - d) + \frac{c_1}{2}\|A_1 y + Mz - d\|^2 + \frac{1}{2c_2}\sum_{i=1}^{n-s}\left\{\left(\max\{0,\,\mu_i - c_2[U_r z]_i\}\right)^2 - \mu_i^2\right\}.
+$$
+
+### Gradients from the Paper (eq. 4)
+
+$$
+\nabla_y L_c = \nabla_y \hat{f}(y,z) + A_1'\!\left(\lambda + c_1(A_1 y + Mz - d)\right)
+$$
+
+$$
+\nabla_z L_c = \nabla_z \hat{f}(y,z) + M'\!\left(\lambda + c_1(A_1 y + Mz - d)\right) - U_r'\!\left(\mu + c_2\, h^+(z,\mu,c_2)\right)
+$$
+
+where $h_i^+(z,\mu,c_2) = \max\!\left(-[U_r z]_i,\, -\mu_i/c_2\right)$.
+
+### Gradients from the Implementation
+
+Given that $g_v = \nabla_v f(v)$ and $v_0$ is constant, expanding $\nabla \hat{f}$ via the chain rule on $v = v_0 + B_1^\top y + Dz$ leads to:
+
+$$
+\nabla_y \hat{f} = B_1 g_v, \qquad \nabla_z \hat{f} = D^\top g_v.
+$$
+
+This gives the fully expanded gradients:
+
+$$
+\nabla_y L_c = B_1\, g_v + A_1^\top(\lambda + c_1\,\delta), \qquad \delta = A_1 y + Mz - d,
+$$
+
+$$
+\nabla_z L_c = D^\top g_v + M^\top(\lambda + c_1\,\delta) - U_r^\top\,\phi, \qquad \phi = \max(\mathbf{0},\, \mu - c_2 u),\; u = U_r z.
+$$
+
+Expanding $-U_r'(\mu + c_2 h^+)$ element-wise:
+
+$$
+\mu_i + c_2 h_i^+
+= \mu_i + c_2 \max\!\left(-u_i,\,-\tfrac{\mu_i}{c_2}\right)
+= \max(\mu_i - c_2 u_i,\; 0)
+= \phi_i.
+$$
+
+Therefore $-U_r'(\mu + c_2 h^+) \equiv -U_r^\top \phi$.
+
+### Code mapping (`objective_and_gradient_direct`)
+
+| Math expression                                                          | Python code                                                                          |
+| ------------------------------------------------------------------------ | ------------------------------------------------------------------------------------ |
+| $v = v_0 + B_1^\top y + Dz$                                    | `v = v_0 + B1.T @ y + D @ z`                                                 |
+| $u = U_r z$                                                              | `u = U_r @ z`                                                                        |
+| $\delta = A_1 y + Mz - d$                                                | `od_error = A1 @ y + M @ z - d_multi`                                                |
+| $\phi = \max(0,\, \mu - c_2 u)$                                          | `max_term_minor = np.maximum(0, mu - c2 * u)`                                        |
+| $g_v = \nabla_v f(v)$                                                    | `grad_v = bpr_gradient(v, capacity, t_0, alpha, beta)`                               |
+| $\nabla_y L_c = B_1 g_v + A_1^\top(\lambda + c_1\delta)$                 | `grad_y = B1 @ grad_v + A1.T @ (lambda_od + c1 * od_error)`                          |
+| $\nabla_z L_c = D^\top g_v + M^\top(\lambda + c_1\delta) - U_r^\top\phi$ | `grad_z = D.T @ grad_v + M.T @ (lambda_od + c1 * od_error) - U_r.T @ max_term_minor` |
+
+The implementation is fully consistent with the paper.
+
+---
+
+## How to Run
+
+### Requirements
+
+The code is implemented in Python and requires the following libraries.
+```
+numpy
+scipy
+pandas
+scikit-learn
+```
+
+Install the dependencies with:
+
+```bash
+pip install -r requirements.txt
+```
+
+### Data
+
+Place GMNS-format input files under `data/<network>/`:
+
+| File | Contents |
+|---|---|
+| `link.csv` | Link attributes: capacity, length, free speed, reference link flow |
+| `node.csv` | Node coordinates and associated zones |
+| `demand.csv` | OD demand matrix (optional; inferred from path flows (columns.csv) if absent) |
+| `columns.csv` | Route assignment from the reference user-equilibrium solver [(OpenDTA)](https://github.com/jdlph/OpenDTA) |
+
+The Chicago Sketch network is included at `data/chicago_sketch/`.
+
+### Running
+
+```bash
+python compressed_tap.py
+```
+
+### Parameters
+
+Key parameters are at the top of `main()` in `compressed_tap.py`:
+
+| Parameter | Default | Description |
+|---|---|---|
+| `data_dir` | `"chicago_sketch"` | Network folder under `data/` |
+| `rank` | `50` | SVD rank $r$ for minor-path compression |
+| `tolerance` | `1e-4` | ALM convergence tolerance |
+| `c1_init` | `1e3` | Initial penalty for OD conservation |
+| `c2_init` | `1e3` | Initial penalty for minor non-negativity |
+| `beta_penalty` | `4.0` | Penalty growth factor |
+| `max_outer_iter` | `20` | Maximum ALM outer iterations |
+| `max_inner_iter` | `200` | Maximum L-BFGS-B inner iterations per outer step |
+
+Results are printed to the console including link volume accuracy ($R^2$), OD
+conservation violation, and BPR objective gap relative to the reference solution.
+
