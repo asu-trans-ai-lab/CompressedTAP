@@ -543,8 +543,6 @@ class BertsekasALM:
             d_singleton = od_info["od_demand"][singleton_ods]
             # Pre-compute constant singleton contribution to link flows
             self.v_singleton = self.B_singleton.T @ d_singleton
-            print(f"  Singleton paths: {self.n_singleton} (from {len(singleton_ods)} ODs)")
-            print(f"    v_singleton contribution: min={np.min(self.v_singleton):.2f}, max={np.max(self.v_singleton):.2f}, mean={np.mean(self.v_singleton):.2f}")
         else:
             self.B_singleton = None
             self.A_singleton = None
@@ -631,20 +629,7 @@ class BertsekasALM:
         self.lambda_od = np.zeros(self.k)
         # λ_m for minor path non-negativity (Full KKT)
         self.lambda_minor = np.zeros(decomp["n_minor"])
-
-        # Compute BPR optimal with debugging
-        print(
-            f"  Computing BPR optimal with v_ref stats: min={np.min(v_ref):.2f}, max={np.max(v_ref):.2f}, mean={np.mean(v_ref):.2f}"
-        )
-        print(
-            f"  Capacity stats: min={np.min(capacity):.2f}, max={np.max(capacity):.2f}, mean={np.mean(capacity):.2f}"
-        )
-        print(
-            f"  t_0 stats: min={np.min(t_0):.4f}, max={np.max(t_0):.4f}, mean={np.mean(t_0):.4f}"
-        )
-
         self.bpr_optimal = bpr_objective(v_ref, capacity, t_0, alpha, beta)
-        print(f"  Computed BPR optimal: {self.bpr_optimal:.4e}\n")
 
         self.history = {
             "outer_iter": [],
@@ -664,8 +649,6 @@ class BertsekasALM:
             "x1_mae": [],
             "x2_r2": [],
             "x2_mae": [],
-            "theta_r2": [],
-            "theta_mae": [],
             "travel_time_r2": [],
             "travel_time_mae": [],
             "elapsed_time": [],
@@ -1249,18 +1232,11 @@ class BertsekasALM:
             x2_r2 = 1 - np.sum((self.x2 - self.x2_ref) ** 2) / (
                 np.sum((self.x2_ref - np.mean(self.x2_ref)) ** 2) + 1e-10
             )
-
-            theta_mae = np.mean(np.abs(theta - self.theta_ref))
-            theta_r2 = 1 - np.sum((theta - self.theta_ref) ** 2) / (
-                np.sum((self.theta_ref - np.mean(self.theta_ref)) ** 2) + 1e-10
-            )
         else:
             # No minor paths - set appropriate values
             self.x2 = np.array([], dtype=np.float64)
             x2_mae = 0.0
             x2_r2 = 1.0  # Perfect fit when no minor paths to predict
-            theta_mae = 0.0
-            theta_r2 = 1.0  # Perfect fit when no latent variables
 
         link_mae = np.mean(np.abs(v - self.v_ref))
         link_r2 = 1 - np.sum((v - self.v_ref) ** 2) / (
@@ -1303,8 +1279,6 @@ class BertsekasALM:
             "x1_r2": x1_r2,
             "x2_mae": x2_mae,
             "x2_r2": x2_r2,
-            "theta_mae": theta_mae,
-            "theta_r2": theta_r2,
             "bpr_pure": bpr_pure,
             "bpr_gap": bpr_gap,
             "bpr_gap_pct": bpr_gap_pct,
@@ -1441,8 +1415,6 @@ class BertsekasALM:
         self.history["x1_mae"].append(metrics["x1_mae"])
         self.history["x2_r2"].append(metrics["x2_r2"])
         self.history["x2_mae"].append(metrics["x2_mae"])
-        self.history["theta_r2"].append(metrics["theta_r2"])
-        self.history["theta_mae"].append(metrics["theta_mae"])
         self.history["travel_time_r2"].append(metrics["travel_time_r2"])
         self.history["travel_time_mae"].append(metrics["travel_time_mae"])
         self.history["elapsed_time"].append(cpu_elapsed)
@@ -1510,7 +1482,7 @@ class BertsekasALM:
         print("BERTSEKAS AUGMENTED LAGRANGIAN METHOD (KKT PROJECTION + STAGNATION)")
         print(f"{'=' * 125}")
         print(
-            f"{'Outer':>6} {'Inner':>6} {'Status':>6} {'Objective':>12} {'OD Viol':>10} {'Minor Viol':>11} {'ρ_OD':>10} {'ρ_minor':>10} {'Link R²':>8} {'θ R²':>8} {'Inner(s)':>10} {'Outer(s)':>10}"
+            f"{'Outer':>6} {'Inner':>6} {'Status':>6} {'Objective':>12} {'OD Viol':>10} {'Minor Viol':>11} {'ρ_OD':>10} {'ρ_minor':>10} {'Link R²':>8} {'Inner(s)':>10} {'Outer(s)':>10}"
         )
         print(f"{'-' * 125}")
 
@@ -1520,7 +1492,7 @@ class BertsekasALM:
             f"{outer_iter:>6} {result.nit:>6} {status:>6} {result.fun:>12.4e} "
             f"{od_viol:>10.7f} {minor_viol:>10.7f} "
             f"{initial_rho_od:>10.2e} {initial_rho_nonneg_minor:>10.2e} "
-            f"{metrics['link_r2']:>8.4f} {metrics['theta_r2']:>8.4f} "
+            f"{metrics['link_r2']:>8.4f} "
             f"{inner_time:>10.3f} {outer_time:>10.3f}"
         )
 
@@ -1929,7 +1901,7 @@ def run_threshold_sensitivity_analysis(
         svd_time = svd_dict["svd_time"]
         if n_minor > 0:
             print(
-                f"  SVD: {n_minor} minor paths → {r} latent variables (compression: {compression_ratio:.2f}x, time: {svd_time:.3f}s CPU)"
+                f"  SVD: {n_minor} minor paths → {r} latent variables (compression: {compression_ratio:.2f}x, time: {svd_time:.3f}s)"
             )
         print(f"  Total decision variables: {total_vars} (vs {n_total} original paths)")
 
@@ -2004,8 +1976,6 @@ def run_threshold_sensitivity_analysis(
                 "x1_mae": final_metrics["x1_mae"],
                 "x2_r2": final_metrics["x2_r2"],
                 "x2_mae": final_metrics["x2_mae"],
-                "theta_r2": final_metrics["theta_r2"],
-                "theta_mae": final_metrics["theta_mae"],
                 "travel_time_r2": final_metrics["travel_time_r2"],
                 "travel_time_mae": final_metrics["travel_time_mae"],
                 "converged": (viol[0] < gamma and viol[1] < gamma),
