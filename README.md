@@ -7,7 +7,7 @@ This repository contains the complete implementation for the submitted manuscrip
 ### Augmented Lagrangian (eq. 3)
 
 $$
-L_c(y,z,\lambda,\mu) = \hat{f}(y,z) + \lambda'(A_1 y + Mz - d) + \frac{c_1}{2}\|A_1 y + Mz - d\|^2 + \frac{1}{2c_2}\sum_{i=1}^{n-s}\left\{\left(\max\{0,\,\mu_i - c_2[U_r z]_i\}\right)^2 - \mu_i^2\right\}.
+L_c(y,z,\lambda,\mu) = \hat{f}(y,z) + \lambda'(A_1 y + Mz - d) + \frac{c_1}{2}\|A_1 y + Mz - d\|^2 + \frac{1}{2c_2}\sum_{i=1}^{n-s}\{(\max\{0,\,\mu_i - c_2[U_r z]_i\})^2 - \mu_i^2\}.
 $$
 
 ### Gradients from the Paper (eq. 4)
@@ -64,9 +64,9 @@ Therefore $-U_r'(\mu + c_2 h^+) \equiv -U_r^\top \phi$.
 | $\nabla_z L_c = D^\top g_v + M^\top(\lambda + c_1\delta) - U_r^\top\phi$ | `grad_z = D.T @ grad_v + M.T @ (lambda_od + c1 * od_error) - U_r.T @ max_term_minor` |
 
 The implementation is fully consistent with the paper. Besides, the code also includes three other gradient implementations for testing and benchmarking purposes. Please refer to **E. Gradients Computation and Overhead** for complexity analysis and performance comparison.
-- `objective_and_gradient_chain_rule`
-- `objective_and_gradient_factored`
-- `objective_and_gradient_mixed`
+1. `objective_and_gradient_chain_rule`
+2. `objective_and_gradient_factored`
+3. `objective_and_gradient_mixed`
 
 ---
 
