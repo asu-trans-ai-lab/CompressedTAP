@@ -1519,7 +1519,7 @@ class ALM:
 
 
 ################################################################################
-# THRESHOLD SENSITIVITY ANALYSIS
+# THRESHOLD ANALYSIS AND HELPER FUNCTIONS
 ################################################################################
 
 
@@ -1999,6 +1999,7 @@ def main():
 
     # Set up thresholds
     thresholds = setup_thresholds(x_ref, od_info)
+    # It is up to the user to select which thresholds to run - for demonstration, we will run the first one of them
     threshold = thresholds[0]
 
     print(f"\nTesting threshold = {threshold}")

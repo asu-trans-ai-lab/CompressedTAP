@@ -1,12 +1,10 @@
 # Compressed Traffic Assignment with Augmented Lagrangian Method
 
-This repository contains the reference implementation for the submitted manuscript:  **"Compressed Traffic Assignment with Augmented Lagrangian Method"**.
+This repository contains the complete implementation for the submitted manuscript:  **"Compressed Traffic Assignment with Augmented Lagrangian Method"**.
 
 ## Gradient Computation: Paper vs. Implementation
 
-### Augmented Lagrangian
-
-The augmented Lagrangian is (eq. 3):
+### Augmented Lagrangian (eq. 3)
 
 $$
 L_c(y,z,\lambda,\mu) = \hat{f}(y,z) + \lambda'(A_1 y + Mz - d) + \frac{c_1}{2}\|A_1 y + Mz - d\|^2 + \frac{1}{2c_2}\sum_{i=1}^{n-s}\left\{\left(\max\{0,\,\mu_i - c_2[U_r z]_i\}\right)^2 - \mu_i^2\right\}.
@@ -65,27 +63,14 @@ Therefore $-U_r'(\mu + c_2 h^+) \equiv -U_r^\top \phi$.
 | $\nabla_y L_c = B_1 g_v + A_1^\top(\lambda + c_1\delta)$                 | `grad_y = B1 @ grad_v + A1.T @ (lambda_od + c1 * od_error)`                          |
 | $\nabla_z L_c = D^\top g_v + M^\top(\lambda + c_1\delta) - U_r^\top\phi$ | `grad_z = D.T @ grad_v + M.T @ (lambda_od + c1 * od_error) - U_r.T @ max_term_minor` |
 
-The implementation is fully consistent with the paper.
+The implementation is fully consistent with the paper. Besides, the code also includes three other gradient implementations for testing and benchmarking purposes. Please refer to **E. Gradients Computation and Overhead** for complexity analysis and performance comparison.
+- `objective_and_gradient_chain_rule`
+- `objective_and_gradient_factored`
+- `objective_and_gradient_mixed`
 
 ---
 
 ## How to Run
-
-### Requirements
-
-The code is implemented in Python and requires the following libraries.
-```
-numpy
-scipy
-pandas
-scikit-learn
-```
-
-Install the dependencies with:
-
-```bash
-pip install -r requirements.txt
-```
 
 ### Data
 
@@ -96,15 +81,9 @@ Place GMNS-format input files under `data/<network>/`:
 | `link.csv` | Link attributes: capacity, length, free speed, reference link flow |
 | `node.csv` | Node coordinates and associated zones |
 | `demand.csv` | OD demand matrix (optional; inferred from path flows (columns.csv) if absent) |
-| `columns.csv` | Route assignment from the reference user-equilibrium solver [(OpenDTA)](https://github.com/jdlph/OpenDTA) |
+| `columns.csv` | Route assignment generated from the reference user-equilibrium solver [(OpenDTA)](https://github.com/jdlph/OpenDTA) |
 
 The Chicago Sketch network is included at `data/chicago_sketch/`.
-
-### Running
-
-```bash
-python compressed_tap.py
-```
 
 ### Parameters
 
@@ -121,6 +100,27 @@ Key parameters are at the top of `main()` in `compressed_tap.py`:
 | `max_outer_iter` | `20` | Maximum ALM outer iterations |
 | `max_inner_iter` | `200` | Maximum L-BFGS-B inner iterations per outer step |
 
+### Dependencies
+
+The code is implemented in Python, and requires the following libraries.
+```
+numpy
+scipy
+pandas
+scikit-learn
+```
+
+Install the dependencies with:
+
+```bash
+pip install -r requirements.txt
+```
+
+### Running
+
+```bash
+python compressed_tap.py
+```
+
 Results are printed to the console including link volume accuracy ($R^2$), OD
 conservation violation, and BPR objective gap relative to the reference solution.
-
