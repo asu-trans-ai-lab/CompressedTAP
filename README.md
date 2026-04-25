@@ -7,63 +7,64 @@ This repository contains the complete implementation for the submitted manuscrip
 ### Augmented Lagrangian (eq. 3)
 
 $$
-L_c(y,z,\lambda,\mu) = \hat{f}(y,z) + \lambda'(A_1 y + Mz - d) + \frac{c_1}{2}\|A_1 y + Mz - d\|^2 + \frac{1}{2c_2}\sum_{i=1}^{n-s}\{(\max\{0,\,\mu_i - c_2[U_r z]_i\})^2 - \mu_i^2\}.
+L_c(y,z,\lambda,\mu) = \hat{f}(y,z) + \lambda'(A_1 y + Mz - d) + \frac{c_1}{2}\lVert A_1 y + Mz - d \rVert^2 + \frac{1}{2c_2}\sum_{i=1}^{n-s}\left[( \max\{0,\mu_i - c_2[U_r z]_i\})^2 - \mu_i^2 \right].
 $$
 
 ### Gradients from the Paper (eq. 4)
 
 $$
-\nabla_y L_c = \nabla_y \hat{f}(y,z) + A_1'\!\left(\lambda + c_1(A_1 y + Mz - d)\right)
+\nabla_y L_c = \nabla_y \hat{f}(y,z) + A_1'\left(\lambda + c_1(A_1 y + Mz - d)\right)
 $$
 
 $$
-\nabla_z L_c = \nabla_z \hat{f}(y,z) + M'\!\left(\lambda + c_1(A_1 y + Mz - d)\right) - U_r'\!\left(\mu + c_2\, h^+(z,\mu,c_2)\right)
+\nabla_z L_c = \nabla_z \hat{f}(y,z) + M'\left(\lambda + c_1(A_1 y + Mz - d)\right) - U_r'\left(\mu + c_2\, h^+(z,\mu,c_2)\right)
 $$
 
-where $h_i^+(z,\mu,c_2) = \max\!\left(-[U_r z]_i,\, -\mu_i/c_2\right)$.
+where $h_i^+(z,\mu,c_2) = \max\left(-[U_r z]_i, -\mu_i/c_2\right)$.
 
 ### Gradients from the Implementation
 
-Given that $g_v = \nabla_v f(v)$ and $v_0$ is constant, expanding $\nabla \hat{f}$ via the chain rule on $v = v_0 + B_1^\top y + Dz$ leads to:
+Given that $g_v = \nabla_v f(v)$ and $v_0$ is constant, expanding $\nabla \hat{f}$ via the chain rule on $v = v_0 + B_1' y + Dz$ leads to:
 
 $$
-\nabla_y \hat{f} = B_1 g_v, \qquad \nabla_z \hat{f} = D^\top g_v.
+\nabla_y \hat{f} = B_1 g_v, \qquad \nabla_z \hat{f} = D' g_v.
 $$
 
 This gives the fully expanded gradients:
 
 $$
-\nabla_y L_c = B_1\, g_v + A_1^\top(\lambda + c_1\,\delta), \qquad \delta = A_1 y + Mz - d,
+\nabla_y L_c = B_1\, g_v + A_1'(\lambda + c_1\,\delta), \qquad \delta = A_1 y + Mz - d,
 $$
 
 $$
-\nabla_z L_c = D^\top g_v + M^\top(\lambda + c_1\,\delta) - U_r^\top\,\phi, \qquad \phi = \max(\mathbf{0},\, \mu - c_2 u),\; u = U_r z.
+\nabla_z L_c = D' g_v + M'(\lambda + c_1\,\delta) - U_r'\,\phi, \qquad \phi = \max(\mathbf{0}, \mu - c_2 u), u = U_r z.
 $$
 
 Expanding $-U_r'(\mu + c_2 h^+)$ element-wise:
 
 $$
 \mu_i + c_2 h_i^+
-= \mu_i + c_2 \max\!\left(-u_i,\,-\tfrac{\mu_i}{c_2}\right)
-= \max(\mu_i - c_2 u_i,\; 0)
+= \mu_i + c_2 \max\left(-u_i,-\tfrac{\mu_i}{c_2}\right)
+= \max(\mu_i - c_2 u_i, 0)
 = \phi_i.
 $$
 
-Therefore $-U_r'(\mu + c_2 h^+) \equiv -U_r^\top \phi$.
+Therefore $-U_r'(\mu + c_2 h^+) \equiv -U_r' \phi$.
 
 ### Code mapping (`objective_and_gradient_direct`)
 
 | Math expression                                                          | Python code                                                                          |
 | ------------------------------------------------------------------------ | ------------------------------------------------------------------------------------ |
-| $v = v_0 + B_1^\top y + Dz$                                    | `v = v_0 + B1.T @ y + D @ z`                                                 |
+| $v = v_0 + B_1' y + Dz$                                    | `v = v_0 + B1.T @ y + D @ z`                                                 |
 | $u = U_r z$                                                              | `u = U_r @ z`                                                                        |
 | $\delta = A_1 y + Mz - d$                                                | `od_error = A1 @ y + M @ z - d_multi`                                                |
-| $\phi = \max(0,\, \mu - c_2 u)$                                          | `max_term_minor = np.maximum(0, mu - c2 * u)`                                        |
+| $\phi = \max(0, \mu - c_2 u)$                                          | `max_term_minor = np.maximum(0, mu - c2 * u)`                                        |
 | $g_v = \nabla_v f(v)$                                                    | `grad_v = bpr_gradient(v, capacity, t_0, alpha, beta)`                               |
-| $\nabla_y L_c = B_1 g_v + A_1^\top(\lambda + c_1\delta)$                 | `grad_y = B1 @ grad_v + A1.T @ (lambda_od + c1 * od_error)`                          |
-| $\nabla_z L_c = D^\top g_v + M^\top(\lambda + c_1\delta) - U_r^\top\phi$ | `grad_z = D.T @ grad_v + M.T @ (lambda_od + c1 * od_error) - U_r.T @ max_term_minor` |
+| $\nabla_y L_c = B_1 g_v + A_1'(\lambda + c_1\delta)$                 | `grad_y = B1 @ grad_v + A1.T @ (lambda_od + c1 * od_error)`                          |
+| $\nabla_z L_c = D' g_v + M'(\lambda + c_1\delta) - U_r'\phi$ | `grad_z = D.T @ grad_v + M.T @ (lambda_od + c1 * od_error) - U_r.T @ max_term_minor` |
 
 The implementation is fully consistent with the paper. Besides, the code also includes three other gradient implementations for testing and benchmarking purposes. Please refer to **E. Gradients Computation and Overhead** for complexity analysis and performance comparison.
+
 1. `objective_and_gradient_chain_rule`
 2. `objective_and_gradient_factored`
 3. `objective_and_gradient_mixed`
