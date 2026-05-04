@@ -1,6 +1,6 @@
 # Compressed Traffic Assignment with Augmented Lagrangian Method
 
-This repository contains the complete implementation for the submitted manuscript:  **"Compressed Traffic Assignment with Augmented Lagrangian Method"**.
+This repository contains the complete implementation for the submitted manuscript: **["Compressed Traffic Assignment with Augmented Lagrangian Method"](https://arxiv.org/abs/2604.23101)**.
 
 ## Gradient Computation: Paper vs. Implementation
 
@@ -55,7 +55,7 @@ Therefore $-U_r'(\mu + c_2 h^+) \equiv -U_r' \phi$.
 
 | Math expression                                                          | Python code                                                                          |
 | ------------------------------------------------------------------------ | ------------------------------------------------------------------------------------ |
-| $v = v_0 + B_1' y + Dz$                                    | `v = v_0 + B1.T @ y + D @ z`                                                 |
+| $v = v_0 + B_1' y + Dz$                                    | `v = v0 + B1.T @ y + D @ z`                                                 |
 | $u = U_r z$                                                              | `u = U_r @ z`                                                                        |
 | $\delta = A_1 y + Mz - d$                                                | `od_error = A1 @ y + M @ z - d_multi`                                                |
 | $\phi = \max(0, \mu - c_2 u)$                                          | `max_term_minor = np.maximum(0, mu - c2 * u)`                                        |
@@ -63,7 +63,7 @@ Therefore $-U_r'(\mu + c_2 h^+) \equiv -U_r' \phi$.
 | $\nabla_y L_c = B_1 g_v + A_1'(\lambda + c_1\delta)$                 | `grad_y = B1 @ grad_v + A1.T @ (lambda_od + c1 * od_error)`                          |
 | $\nabla_z L_c = D' g_v + M'(\lambda + c_1\delta) - U_r'\phi$ | `grad_z = D.T @ grad_v + M.T @ (lambda_od + c1 * od_error) - U_r.T @ max_term_minor` |
 
-The implementation is fully consistent with the paper. Besides, the code also includes three other gradient implementations for testing and benchmarking purposes. Please refer to **E. Gradients Computation and Overhead** for complexity analysis and performance comparison.
+The implementation is fully consistent with the paper. Besides, the code also includes three other gradient implementations for testing and benchmarking purposes. Please refer to **[E. Gradients Computation and Overhead](https://arxiv.org/abs/2604.23101)** for complexity analysis and performance comparison.
 
 1. `objective_and_gradient_chain_rule`
 2. `objective_and_gradient_factored`
@@ -124,4 +124,4 @@ python compressed_tap.py
 ```
 
 Results are printed to the console including link volume accuracy ($R^2$), OD
-conservation violation, and BPR objective gap relative to the reference solution.
+conservation violation, minor path flow negativity violation, and BPR objective gap relative to the reference solution.
