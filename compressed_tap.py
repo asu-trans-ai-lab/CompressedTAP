@@ -489,13 +489,16 @@ def compute_svd_compression(
 
 
 def bpr_objective(v, capacity, t_0, alpha=0.15, beta=4.0):
-    """BPR objective function (congestion component with t_0 scaling)"""
-    return np.sum(t_0 * capacity * alpha / (beta + 1) * (v / capacity) ** (beta + 1))
+    """Beckmann objective for BPR travel time: integral of t_a(s) from 0 to v_a."""
+    return np.sum(
+        t_0 * v
+        + t_0 * capacity * alpha / (beta + 1) * (v / capacity) ** (beta + 1)
+    )
 
 
 def bpr_gradient(v, capacity, t_0, alpha=0.15, beta=4.0):
-    """Gradient of BPR objective (with t_0 scaling)"""
-    return t_0 * alpha * (v / capacity) ** beta
+    """Gradient of Beckmann objective, equal to BPR link travel time t_a(v)."""
+    return t_0 * (1.0 + alpha * (v / capacity) ** beta)
 
 
 ################################################################################
@@ -2000,7 +2003,7 @@ def main():
     # Set up thresholds
     thresholds = setup_thresholds(x_ref, od_info)
     # It is up to the user to select which thresholds to run - for demonstration, we will run the first one of them
-    threshold = thresholds[0]
+    threshold = thresholds[3]
 
     print(f"\nTesting threshold = {threshold}")
     print("-" * 100)
