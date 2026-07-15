@@ -54,23 +54,40 @@ def load_gmns_data_with_od(
     # Detect columns
     link_id_col = _detect_column(links, ["link_id", "linkid", "id"], "link_id")
     ref_vol_col = None
+    perf_link_id_col = None
     if link_perf is not None:
         perf_link_id_col = _detect_column(
             link_perf, ["link_id", "linkid", "id"], "link_id"
         )
-        ref_vol_col = _detect_column(
-            link_perf,
-            ["volume", "link_volume", "obs_volume", "ref_volume", "reference_volume"],
-            "reference volume",
-        )
-    else:
-        ref_vol_col = _detect_column(
-            links,
-            ["ref_volume", "reference_volume", "obs_volume", "volume"],
-            "reference volume",
-        )
+        try:
+            ref_vol_col = _detect_column(
+                link_perf,
+                [
+                    "volume",
+                    "link_volume",
+                    "obs_volume",
+                    "ref_volume",
+                    "reference_volume",
+                ],
+                "reference volume",
+            )
+        except ValueError:
+            # Fallback to link file or route-derived volumes below.
+            ref_vol_col = None
+
+    if ref_vol_col is None:
+        try:
+            ref_vol_col = _detect_column(
+                links,
+                ["ref_volume", "reference_volume", "obs_volume", "volume"],
+                "reference volume",
+            )
+        except ValueError:
+            ref_vol_col = None
     route_id_col = _detect_column(
-        routes, ["route_id", "path_id", "agent_id", "id"], "route/path_id"
+        routes,
+        ["route_id", "path_id", "unique_route_id", "agent_id", "id"],
+        "route/path_id",
     )
     link_seq_col = _detect_column(
         routes,
@@ -78,7 +95,9 @@ def load_gmns_data_with_od(
         "link sequence",
     )
     path_vol_col = _detect_column(
-        routes, ["volume", "flow", "path_volume", "path_flow"], "path volume"
+        routes,
+        ["volume", "flow", "path_volume", "path_flow", "ref_volume"],
+        "path volume",
     )
 
     # Detect OD columns
@@ -100,11 +119,15 @@ def load_gmns_data_with_od(
     link_id_to_idx = {lid: idx for idx, lid in enumerate(link_ids)}
     n_links = len(link_ids)
 
-    if link_perf is not None:
+    if ref_vol_col is not None and link_perf is not None:
         link_vol_map = dict(zip(link_perf[perf_link_id_col], link_perf[ref_vol_col]))
-    else:
+        v_ref_raw = np.array([link_vol_map.get(lid, 0.0) for lid in link_ids], dtype=float)
+    elif ref_vol_col is not None:
         link_vol_map = dict(zip(links[link_id_col], links[ref_vol_col]))
-    v_ref_raw = np.array([link_vol_map.get(lid, 0.0) for lid in link_ids], dtype=float)
+        v_ref_raw = np.array([link_vol_map.get(lid, 0.0) for lid in link_ids], dtype=float)
+    else:
+        print("  Reference link volume column not found in link files; deriving from route/path volumes")
+        v_ref_raw = np.zeros(n_links, dtype=float)
 
     # Debug: Check if we have meaningful reference volumes
     print(
@@ -1981,7 +2004,8 @@ def main():
     rank = 50
     tolerance = 1e-4
 
-    data_dir = "chicago_sketch"
+    # data_dir = "chicago_sketch"
+    data_dir = "two_corridor"
 
     link_file = f"data/{data_dir}/link.csv"
     # link_perf_file = f"data/{data_dir}/link_performance_ue.csv"
