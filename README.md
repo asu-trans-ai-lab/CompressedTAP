@@ -141,4 +141,4 @@ python compressed_tap.py --data-dir two_corridor
 ```
 
 Results are printed to the console including link volume accuracy ($R^2$), OD
-conservation violation, minor path flow negativity violation, and BPR objective gap relative to the reference solution.
+conservation violation, minor path flow negativity violation, and Reference Objective Difference ($\%$) against the reference solution.

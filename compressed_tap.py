@@ -659,7 +659,7 @@ class ALM:
         self.lambda_od = np.zeros(self.k)
         # multipliers for minor path non-negativity (Full KKT)
         self.mu = np.zeros(decomp["n_minor"])
-        self.bpr_optimal = bpr_objective(v_ref, capacity, t_0, alpha, beta)
+        self.bpr_ref = bpr_objective(v_ref, capacity, t_0, alpha, beta)
 
         self.history = {
             "inner_iter": [],
@@ -748,8 +748,8 @@ class ALM:
             x_ref_full[self.minor_mask] = self.w_ref
 
         bpr_pure = bpr_objective(v, self.capacity, self.t_0, self.alpha, self.beta)
-        bpr_gap = bpr_pure - self.bpr_optimal
-        bpr_gap_pct = 100 * bpr_gap / self.bpr_optimal
+        ref_obj_abs_diff = bpr_pure - self.bpr_ref
+        ref_obj_rel_diff = 100 * ref_obj_abs_diff / self.bpr_ref
 
         # Travel time metrics (using BPR function - congestion component with t_0 scaling)
         t_ref = self.t_0 * self.alpha * (self.v_ref / self.capacity) ** self.beta
@@ -768,8 +768,8 @@ class ALM:
             "w_mae": w_mae,
             "w_r2": w_r2,
             "bpr_pure": bpr_pure,
-            "bpr_gap": bpr_gap,
-            "bpr_gap_pct": bpr_gap_pct,
+            "ref_obj_abs_diff": ref_obj_abs_diff,
+            "ref_obj_rel_diff": ref_obj_rel_diff,
             "travel_time_mae": travel_time_mae,
             "travel_time_r2": travel_time_r2,
         }
@@ -1759,10 +1759,10 @@ def build_threshold_summary(
         "opt_cpu_time": opt_cpu_time,
         "per_outer_cpu_time": per_outer_cpu_time,
         "per_inner_cpu_time": per_inner_cpu_time,
-        "bpr_optimal": optimizer.bpr_optimal,
+        "bpr_ref": optimizer.bpr_ref,
         "bpr_pure": final_metrics["bpr_pure"],
-        "bpr_gap": final_metrics["bpr_gap"],
-        "bpr_gap_pct": final_metrics["bpr_gap_pct"],
+        "ref_obj_abs_diff": final_metrics["ref_obj_abs_diff"],
+        "ref_obj_rel_diff": final_metrics["ref_obj_rel_diff"],
         "od_violation": viol[0],
         "nonneg_minor_violation": viol[1],
         "link_r2": final_metrics["link_r2"],
@@ -1918,9 +1918,9 @@ def print_od_violation_analysis(optimizer, result, gamma):
 def print_summary(summary):
     print("\n  Summary:")
     print(f"    Converged: {summary['converged']}")
-    print(f"    BPR: {summary['bpr_pure']:.4e} (Optimal: {summary['bpr_optimal']:.4e})")
+    print(f"    BPR: {summary['bpr_pure']:.4e} (Reference: {summary['bpr_ref']:.4e})")
     print(
-        f"    BPR Gap: {summary['bpr_gap_pct']:.3f}% {'(Better!)' if summary['bpr_gap_pct'] < 0 else ''}"
+        f"    Reference Objective Diff: {summary['ref_obj_rel_diff']:.3f}%"
     )
     print(f"    Link R²: {summary['link_r2']:.6f}, MAE: {summary['link_mae']:.2f}")
     print(
@@ -1957,7 +1957,7 @@ def print_summary_table(results_df):
         "compression_ratio",
         "reduction_pct",
         "link_r2",
-        "bpr_gap_pct",
+        "ref_obj_rel_diff",
         "od_violation",
         "nonneg_minor_violation",
         "opt_cpu_time",
@@ -1972,7 +1972,7 @@ def print_summary_table(results_df):
     # Format the table
     print(
         f"{'threshold':>10} {'n_major':>12} {'n_minor':>12} {'svd_rank':>9} {'compression_ratio':>18} "
-        f"{'reduction_pct':>14} {'link_r2':>9} {'bpr_gap_pct':>12} {'od_violation':>13} {'Minor Viol':>13} "
+        f"{'reduction_pct':>14} {'link_r2':>9} {'ref_obj_rel_diff':>12} {'od_violation':>13} {'Minor Viol':>13} "
         f"{'opt_cpu_time':>14} {'speedup_cpu_time':>12} {'speedup_ub':>12} {'converged':>10} {'convergence_reason':<50}"
     )
 
@@ -1985,7 +1985,7 @@ def print_summary_table(results_df):
             f"{row['compression_ratio']:>18.2f} "
             f"{row['reduction_pct']:>14.2f} "
             f"{row['link_r2']:>9.4f} "
-            f"{row['bpr_gap_pct']:>12.3f} "
+            f"{row['ref_obj_rel_diff']:>12.3f} "
             f"{row['od_violation']:>13.7f} "
             f"{row['nonneg_minor_violation']:>13.7f} "
             f"{row['opt_cpu_time']:>14.2f} "
