@@ -98,11 +98,11 @@ The Chicago Sketch network is included at `data/chicago_sketch/`.
 
 ### Parameters
 
-Key parameters are at the top of `main()` in `compressed_tap.py`:
+Key runtime parameters are configured in `compressed_tap.py`. The dataset is selected from CLI:
 
 | Parameter | Default | Description |
 |---|---|---|
-| `data_dir` | `"chicago_sketch"` | Network folder under `data/` |
+| `--data-dir` | `"two_corridor"` | Network folder under `data/` |
 | `rank` | `50` | SVD rank $r$ for minor-path compression |
 | `tolerance` | `1e-4` | ALM convergence tolerance |
 | `c1_init` | `1e3` | Initial penalty for OD conservation |
@@ -131,6 +131,13 @@ pip install -r requirements.txt
 
 ```bash
 python compressed_tap.py
+```
+
+To choose a dataset folder under `data/`, pass `--data-dir`:
+
+```bash
+python compressed_tap.py --data-dir chicago_sketch
+python compressed_tap.py --data-dir two_corridor
 ```
 
 Results are printed to the console including link volume accuracy ($R^2$), OD

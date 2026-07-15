@@ -3,6 +3,7 @@ Compressed Traffic Assignment with Augmented Lagrangian Method (ALM)
 """
 
 import os
+import argparse
 
 # Reduce thread overhead for better wall-clock performance
 os.environ["OMP_NUM_THREADS"] = "1"
@@ -2000,12 +2001,20 @@ def print_summary_table(results_df):
 ################################################################################
 
 
-def main():
+def parse_args():
+    """Parse command line arguments for script configuration."""
+    parser = argparse.ArgumentParser(description="Run compressed TAP optimization")
+    parser.add_argument(
+        "--data-dir",
+        default="two_corridor",
+        help="Dataset subdirectory under data/ (e.g., chicago_sketch, two_corridor)",
+    )
+    return parser.parse_args()
+
+
+def main(data_dir):
     rank = 50
     tolerance = 1e-4
-
-    # data_dir = "chicago_sketch"
-    data_dir = "two_corridor"
 
     link_file = f"data/{data_dir}/link.csv"
     # link_perf_file = f"data/{data_dir}/link_performance_ue.csv"
@@ -2105,4 +2114,5 @@ def main():
 
 
 if __name__ == "__main__":
-    main()
+    args = parse_args()
+    main(args.data_dir)
