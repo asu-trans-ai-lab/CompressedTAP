@@ -2,6 +2,16 @@
 
 This repository contains the complete implementation for the submitted manuscript: **["Compressed Traffic Assignment with Augmented Lagrangian Method"](https://arxiv.org/abs/2604.23101)**.
 
+This work proposes a compressed representation of the path-flow space using low-rank Singular Value Decomposition (SVD), effectively projecting the high-dimensional path-flow variables onto a compact subspace. It separates paths into major
+paths (retained explicitly) and minor paths (captured implicitly via the low-rank basis),
+drastically reducing the number of decision variables.
+
+The resulting compressed problem is solved using an Augmented Lagrangian Method, which
+handles OD flow conservation constraints and non-negativity of compressed path flows as soft
+penalties. The dual multipliers are updated iteratively in an outer loop, while each inner
+subproblem is solved efficiently with L-BFGS-B — a quasi-Newton method well-suited for
+large-scale bound-constrained optimization.
+
 ## Gradient Computation: Paper vs. Implementation
 
 ### Augmented Lagrangian (eq. 3)
