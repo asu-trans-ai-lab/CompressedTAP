@@ -104,6 +104,7 @@ Key runtime parameters are configured in `config.json`.
 | --- | --- | --- |
 | `data_dir` | `"two_corridor"` | Network folder under `data/` |
 | `rank` | `50` | SVD rank $r$ for minor-path compression |
+| `random_state` | `42` | Global random seed used by randomized SVD and ALM cold-start noise |
 | `tolerance` | `1e-4` | ALM convergence tolerance |
 | `threshold_index` | `0` | Index into thresholds returned by `setup_thresholds` |
 | `demand_file` | `null` | Optional demand file path; auto-detected if omitted |

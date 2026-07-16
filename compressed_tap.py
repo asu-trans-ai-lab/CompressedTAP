@@ -31,6 +31,7 @@ NEGLIGIBLE_DEMAND_THRESHOLD = 0.001
 DEFAULT_CONFIG = {
     "data_dir": "two_corridor",
     "rank": 50,
+    "random_state": 42,
     "tolerance": 1e-4,
     "threshold_index": 0,
     "demand_file": None,
@@ -486,7 +487,12 @@ def decompose_paths(B, x_ref, od_info, threshold, add_singleton_category=True):
 
 
 def compute_svd_compression(
-    B2, w_ref, rank_pct=0.30, max_rank=50, use_truncated_svd=True
+    B2,
+    w_ref,
+    rank_pct=0.30,
+    max_rank=50,
+    use_truncated_svd=True,
+    random_state=None,
 ):
     """Compute SVD compression using TruncatedSVD for large sparse matrices"""
     n_minor, m = B2.shape
@@ -515,7 +521,7 @@ def compute_svd_compression(
         B2_float32 = B2.astype(np.float32)
 
         svd_model = TruncatedSVD(
-            n_components=r, random_state=42, algorithm="randomized"
+            n_components=r, random_state=random_state, algorithm="randomized"
         )
 
         U_sigma = svd_model.fit_transform(B2_float32)
@@ -605,7 +611,7 @@ class ALM:
         c2_init=1e5,
         beta_penalty=10.0,
         tolerance=0.1,
-        random_state=42,
+        random_state=None,
     ):
         self.B1 = decomp["B1"]
         # Ensure B2 exists; default to empty (n_minor x m_links) sparse matrix when missing
@@ -710,7 +716,7 @@ class ALM:
         self.MAX_PENALTY = 1e20
 
         # Dedicated RNG so the cold-start symmetry-breaking noise is reproducible
-        # (mirrors the random_state=42 already used for the SVD compression).
+        # and aligned with the configured SVD seed.
         self.rng = np.random.default_rng(random_state)
 
         # Track previous violations for adaptive penalty updates
@@ -1841,7 +1847,7 @@ def build_threshold_summary(
     }
 
 
-def compute_svd_for_threshold(decomp, n_minor, rank, threshold):
+def compute_svd_for_threshold(decomp, n_minor, rank, threshold, random_state):
     # Handle special case: no minor paths (when threshold is 0 or very low, all paths become major)
     if n_minor == 0:
         print(
@@ -1860,7 +1866,12 @@ def compute_svd_for_threshold(decomp, n_minor, rank, threshold):
         }
 
     # SVD compression for minor paths
-    svd_dict = compute_svd_compression(decomp["B2"], decomp["w_ref"], max_rank=rank)
+    svd_dict = compute_svd_compression(
+        decomp["B2"],
+        decomp["w_ref"],
+        max_rank=rank,
+        random_state=random_state,
+    )
     if svd_dict is None:
         print(f"   SVD compression failed - skipping threshold {threshold}")
     return svd_dict
@@ -2078,6 +2089,7 @@ def parse_args():
 def main(config):
     data_dir = config["data_dir"]
     rank = config["rank"]
+    random_state = config["random_state"]
     tolerance = config["tolerance"]
 
     link_file = f"data/{data_dir}/link.csv"
@@ -2124,7 +2136,9 @@ def main(config):
         print_decomp_stats(decomp)
     )
 
-    svd_dict = compute_svd_for_threshold(decomp, n_minor, rank, threshold)
+    svd_dict = compute_svd_for_threshold(
+        decomp, n_minor, rank, threshold, random_state
+    )
     if svd_dict is None:
         raise Exception(
             f"SVD compression failed - cannot proceed with threshold {threshold}"
@@ -2149,6 +2163,7 @@ def main(config):
         c2_init=config["alm"]["c2_init"],
         beta_penalty=config["alm"]["beta_penalty"],
         tolerance=tolerance,
+        random_state=random_state,
     )
 
     result = optimizer.optimize(

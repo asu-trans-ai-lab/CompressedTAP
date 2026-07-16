@@ -1,6 +1,7 @@
 {
   "data_dir": "two_corridor",
   "rank": 50,
+  "random_state": 42,
   "tolerance": 0.0001,
   "threshold_index": 0,
   "demand_file": null,
