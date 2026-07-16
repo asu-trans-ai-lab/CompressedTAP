@@ -577,16 +577,26 @@ def compute_svd_compression(
 
 
 def bpr_objective(v, capacity, t_0, alpha=0.15, beta=4.0):
-    """Beckmann objective for BPR travel time: integral of t_a(s) from 0 to v_a."""
+    """Beckmann objective for BPR travel time: integral of t_a(s) from 0 to v_a.
+
+    max(v, 0) is applied to the POWER term only, never to the linear one. The compressed
+    model uses a signed basis, so link volumes can go negative between iterates; the raw
+    analytic form gives (v/c)**(beta+1) < 0 there, making the objective CONCAVE below zero
+    and the subproblem locally non-convex exactly where L-BFGS-B line searches probe. With
+    this split, d(objective)/dv == bpr_gradient(v) identically for ALL v, feasible points
+    (v >= 0) are numerically unchanged, and the extension below zero is linear (convex).
+    """
+    vp = np.maximum(v, 0.0)
     return np.sum(
         t_0 * v
-        + t_0 * capacity * alpha / (beta + 1) * (v / capacity) ** (beta + 1)
+        + t_0 * capacity * alpha / (beta + 1) * (vp / capacity) ** (beta + 1)
     )
 
 
 def bpr_gradient(v, capacity, t_0, alpha=0.15, beta=4.0):
-    """Gradient of Beckmann objective, equal to BPR link travel time t_a(v)."""
-    return t_0 * (1.0 + alpha * (v / capacity) ** beta)
+    """d/dv of bpr_objective(), which IS the BPR travel time t(v) for all v."""
+    vp = np.maximum(v, 0.0)
+    return t_0 * (1.0 + alpha * (vp / capacity) ** beta)
 
 
 ################################################################################
@@ -699,6 +709,14 @@ class ALM:
             if self.r > 0:
                 self.M = self.A2 @ self.U_r
 
+        # Per-path OD index in d_multi coordinates, used by feasible_projection(). Major and
+        # minor paths all belong to multi-path ODs, so the remap is total on them.
+        multi_remap = -np.ones(self.k_total, dtype=np.int64)
+        multi_remap[np.where(self.multi_od_mask)[0]] = np.arange(self.k)
+        path_to_od_all = od_info["path_to_od"]
+        self.od_of_major = multi_remap[path_to_od_all[decomp["major_indices"]]]
+        self.od_of_minor = multi_remap[path_to_od_all[decomp["minor_indices"]]]
+
         self.s = decomp["s"]
         self.m = self.B1.shape[1]
 
@@ -781,6 +799,31 @@ class ALM:
 
         return False, None
 
+    def feasible_projection(self, y, w=None):
+        """Project (y, w) onto the feasible set: nonnegative flows, OD conservation EXACT.
+
+        Negative flows are clipped, then each multi-path OD is rescaled so its flows sum
+        exactly to its demand (singleton ODs are feasible by construction). Returns
+        (y_f, w_f, v_f), with v_f including the constant singleton background v0. The
+        reportable Reference Objective Difference is evaluated here, not at the raw ALM
+        iterate: an infeasible iterate can price below the reference, which is the
+        negative-gap defect identified in review."""
+        y_p = np.maximum(y, 0.0)
+        w_p = (np.maximum(w, 0.0) if w is not None and len(w) > 0
+               else np.array([], dtype=np.float64))
+        s_flow = np.zeros(self.k)
+        np.add.at(s_flow, self.od_of_major, y_p)
+        if len(w_p) > 0:
+            np.add.at(s_flow, self.od_of_minor, w_p)
+        scale = np.divide(self.d_multi, s_flow, out=np.ones_like(self.d_multi),
+                          where=s_flow > 1e-12)
+        y_f = y_p * scale[self.od_of_major]
+        w_f = w_p * scale[self.od_of_minor] if len(w_p) > 0 else w_p
+        v_f = (self.v0 if self.v0 is not None else 0.0) + self.B1.T @ y_f
+        if len(w_f) > 0:
+            v_f = v_f + self.B2.T @ w_f
+        return y_f, w_f, np.asarray(v_f).flatten()
+
     def compute_metrics(self, y, v):
         """Compute comprehensive metrics"""
         # Handle minor path metrics (only if minor paths exist)
@@ -817,12 +860,28 @@ class ALM:
             x_ref_full[self.minor_mask] = self.w_ref
 
         bpr_pure = bpr_objective(v, self.capacity, self.t_0, self.alpha, self.beta)
-        ref_obj_abs_diff = bpr_pure - self.bpr_ref
+        # RAW difference: evaluated at the (possibly infeasible) ALM iterate. An iterate that
+        # under-delivers demand prices BELOW the reference, so this value can be negative --
+        # the negative "BPR gaps" flagged in review (OPRE-2026-04-2974, R1 pt 2 / R2 pt 3).
+        # Kept as a labelled diagnostic only.
+        ref_obj_abs_diff_raw = bpr_pure - self.bpr_ref
+        ref_obj_rel_diff_raw = 100 * ref_obj_abs_diff_raw / self.bpr_ref
+
+        # REPORTABLE Reference Objective Difference: evaluated at the FEASIBLE PROJECTION of
+        # the same iterate (nonnegative flows, OD conservation exact). By convexity a feasible
+        # point cannot price below the optimum, so a negative value here certifies an
+        # under-converged REFERENCE -- a finding to report, never a result to publish.
+        _, _, v_feas = self.feasible_projection(y, self.w if self.r > 0 else None)
+        bpr_feasible = bpr_objective(v_feas, self.capacity, self.t_0, self.alpha, self.beta)
+        ref_obj_abs_diff = bpr_feasible - self.bpr_ref
         ref_obj_rel_diff = 100 * ref_obj_abs_diff / self.bpr_ref
 
-        # Travel time metrics (using BPR function - congestion component with t_0 scaling)
-        t_ref = self.t_0 * self.alpha * (self.v_ref / self.capacity) ** self.beta
-        t_pred = self.t_0 * self.alpha * (v / self.capacity) ** self.beta
+        # Travel time metrics: actual BPR travel times t(v) = bpr_gradient(). The previous
+        # form omitted t_0 and so compared link DELAYS despite the name; travel_time_mae is
+        # unaffected (t_0 cancels in the difference) but travel_time_r2 is not, since
+        # var(t_0 + delay) differs from var(delay) wherever free-flow times vary.
+        t_ref = bpr_gradient(self.v_ref, self.capacity, self.t_0, self.alpha, self.beta)
+        t_pred = bpr_gradient(v, self.capacity, self.t_0, self.alpha, self.beta)
 
         travel_time_mae = np.mean(np.abs(t_pred - t_ref))
         travel_time_r2 = 1 - np.sum((t_pred - t_ref) ** 2) / (
@@ -837,8 +896,11 @@ class ALM:
             "w_mae": w_mae,
             "w_r2": w_r2,
             "bpr_pure": bpr_pure,
+            "bpr_feasible": bpr_feasible,
             "ref_obj_abs_diff": ref_obj_abs_diff,
             "ref_obj_rel_diff": ref_obj_rel_diff,
+            "ref_obj_abs_diff_raw": ref_obj_abs_diff_raw,
+            "ref_obj_rel_diff_raw": ref_obj_rel_diff_raw,
             "travel_time_mae": travel_time_mae,
             "travel_time_r2": travel_time_r2,
         }
@@ -1832,6 +1894,8 @@ def build_threshold_summary(
         "bpr_pure": final_metrics["bpr_pure"],
         "ref_obj_abs_diff": final_metrics["ref_obj_abs_diff"],
         "ref_obj_rel_diff": final_metrics["ref_obj_rel_diff"],
+        "ref_obj_rel_diff_raw": final_metrics["ref_obj_rel_diff_raw"],
+        "bpr_feasible": final_metrics["bpr_feasible"],
         "od_violation": viol[0],
         "nonneg_minor_violation": viol[1],
         "link_r2": final_metrics["link_r2"],
@@ -1992,9 +2056,22 @@ def print_od_violation_analysis(optimizer, result, gamma):
 def print_summary(summary):
     print("\n  Summary:")
     print(f"    Converged: {summary['converged']}")
-    print(f"    BPR: {summary['bpr_pure']:.4e} | Reference: {summary['bpr_ref']:.4e}")
     print(
-        f"    Reference Objective Diff: {summary['ref_obj_rel_diff']:.6f}%"
+        f"    BPR (feasible): {summary['bpr_feasible']:.4e} | "
+        f"Reference: {summary['bpr_ref']:.4e}"
+    )
+    # The reportable diff is computed at the FEASIBLE PROJECTION of the final iterate. A
+    # negative value cannot mean the model beat the optimum (a feasible point cannot price
+    # below it); it certifies the REFERENCE is under-converged.
+    warn = (
+        "  ** NEGATIVE: reference under-converged -- tighten it; do not report **"
+        if summary["ref_obj_rel_diff"] < -1e-12
+        else ""
+    )
+    print(f"    Reference Objective Diff (feasible): {summary['ref_obj_rel_diff']:+.6f}%{warn}")
+    print(
+        f"    Reference Objective Diff raw iterate (diagnostic only, may be negative "
+        f"when infeasible): {summary['ref_obj_rel_diff_raw']:+.6f}%"
     )
     print(f"    Link Volume R²: {summary['link_r2']:.6f}, MAE: {summary['link_mae']:.6f}")
     print(
