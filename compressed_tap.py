@@ -4,6 +4,7 @@ Compressed Traffic Assignment with Augmented Lagrangian Method (ALM)
 
 import os
 import argparse
+import json
 
 # Reduce thread overhead for better wall-clock performance
 os.environ["OMP_NUM_THREADS"] = "1"
@@ -25,6 +26,63 @@ warnings.filterwarnings("ignore")
 
 # Threshold for filtering zero/negligible demand OD pairs
 NEGLIGIBLE_DEMAND_THRESHOLD = 0.001
+
+
+DEFAULT_CONFIG = {
+    "data_dir": "two_corridor",
+    "rank": 50,
+    "tolerance": 1e-4,
+    "threshold_index": 0,
+    "demand_file": None,
+    "link_perf_file": None,
+    "alm": {
+        "c1_init": 1e3,
+        "c2_init": 1e3,
+        "beta_penalty": 4.0,
+        "max_outer_iter": 20,
+        "max_inner_iter": 200,
+        "stagnation_tol": 1e-6,
+        "stagnation_window": 3,
+    },
+}
+
+
+def _deep_merge(base, override):
+    """Recursively merge override dict into base dict and return a new dict."""
+    merged = dict(base)
+    for key, value in override.items():
+        if (
+            key in merged
+            and isinstance(merged[key], dict)
+            and isinstance(value, dict)
+        ):
+            merged[key] = _deep_merge(merged[key], value)
+        else:
+            merged[key] = value
+    return merged
+
+
+def load_config(config_path):
+    """Load runtime configuration from JSON and merge with defaults."""
+    config = dict(DEFAULT_CONFIG)
+    config["alm"] = dict(DEFAULT_CONFIG["alm"])
+
+    if config_path is None:
+        return config
+
+    path = Path(config_path)
+    if not path.exists():
+        raise FileNotFoundError(
+            f"Config file not found: {config_path}. Provide a valid --config path."
+        )
+
+    with path.open("r", encoding="utf-8") as f:
+        user_config = json.load(f)
+
+    if not isinstance(user_config, dict):
+        raise ValueError("Config file must contain a JSON object at the top level.")
+
+    return _deep_merge(config, user_config)
 
 
 def _detect_column(df, candidates, context):
@@ -1519,7 +1577,7 @@ class ALM:
         print("AUGMENTED LAGRANGIAN METHOD (KKT PROJECTION + STAGNATION)")
         print(f"{'=' * 116}")
         print(
-            f"{'Outer':>6} {'Inner':>6} {'Status':>6} {'Objective':>12} {'OD Viol':>10} {'Minor Viol':>11} {'c1':>10} {'c2':>10} {'Link R²':>8} {'Inner(s)':>10} {'Outer(s)':>10}"
+            f"{'Outer':>6} {'Inner':>6} {'Status':>6} {'Objective':>12} {'OD Viol':>10} {'Minor Viol':>11} {'c1':>10} {'c2':>10} {'Link Vol R²':>8} {'Inner(s)':>10} {'Outer(s)':>10}"
         )
         print(f"{'-' * 116}")
 
@@ -1918,21 +1976,21 @@ def print_od_violation_analysis(optimizer, result, gamma):
 def print_summary(summary):
     print("\n  Summary:")
     print(f"    Converged: {summary['converged']}")
-    print(f"    BPR: {summary['bpr_pure']:.4e} (Reference: {summary['bpr_ref']:.4e})")
+    print(f"    BPR: {summary['bpr_pure']:.4e} | Reference: {summary['bpr_ref']:.4e}")
     print(
-        f"    Reference Objective Diff: {summary['ref_obj_rel_diff']:.3f}%"
+        f"    Reference Objective Diff: {summary['ref_obj_rel_diff']:.6f}%"
     )
-    print(f"    Link R²: {summary['link_r2']:.6f}, MAE: {summary['link_mae']:.2f}")
+    print(f"    Link Volume R²: {summary['link_r2']:.6f}, MAE: {summary['link_mae']:.6f}")
     print(
         f"    Travel Time R²: {summary['travel_time_r2']:.6f}, MAE: {summary['travel_time_mae']:.6f}"
     )
     print(
-        f"    CPU Time: SVD={summary['svd_time']:.3f}s, Optimization={summary['opt_cpu_time']:.2f}s"
+        f"    CPU Time: SVD={summary['svd_time']:.6f}s, Optimization={summary['opt_cpu_time']:.6f}s"
     )
     print(
-        f"    Per-iteration CPU Time: Outer={summary['per_outer_cpu_time']:.3f}s, Inner={summary['per_inner_cpu_time']:.4f}s"
+        f"    Per-iteration CPU Time: Outer={summary['per_outer_cpu_time']:.6f}s, Inner={summary['per_inner_cpu_time']:.6f}s"
     )
-    print(f"    Variables reduced by: {summary['reduction_pct']:.1f}%")
+    print(f"    Variables reduced by: {summary['reduction_pct']:.2f}%")
     print(f"    Speedup upper bound: {summary['speedup_ub']:.2f}x")
 
 
@@ -2005,24 +2063,33 @@ def parse_args():
     """Parse command line arguments for script configuration."""
     parser = argparse.ArgumentParser(description="Run compressed TAP optimization")
     parser.add_argument(
-        "--data-dir",
-        default="two_corridor",
-        help="Dataset subdirectory under data/ (e.g., chicago_sketch, two_corridor)",
+        "--config",
+        default="config.json",
+        help="Path to JSON config file",
     )
     return parser.parse_args()
 
 
-def main(data_dir):
-    rank = 50
-    tolerance = 1e-4
+def main(config):
+    data_dir = config["data_dir"]
+    rank = config["rank"]
+    tolerance = config["tolerance"]
 
     link_file = f"data/{data_dir}/link.csv"
-    # link_perf_file = f"data/{data_dir}/link_performance_ue.csv"
-    link_perf_file = None  # No link performance file provided
-
     route_file = f"data/{data_dir}/columns.csv"
-    # demand_file = f"data/{data_dir}/demand.csv"
-    demand_file = None  # No demand file provided
+
+    demand_file = config.get("demand_file")
+    link_perf_file = config.get("link_perf_file")
+
+    if demand_file is None:
+        default_demand_file = f"data/{data_dir}/demand.csv"
+        if Path(default_demand_file).exists():
+            demand_file = default_demand_file
+
+    if link_perf_file is None:
+        default_link_perf_file = f"data/{data_dir}/link_performance_ue.csv"
+        if Path(default_link_perf_file).exists():
+            link_perf_file = default_link_perf_file
 
     print("\n" + "=" * 101)
     print(" COMPRESSED TAP OPTIMIZATION")
@@ -2035,8 +2102,12 @@ def main(data_dir):
 
     # Set up thresholds
     thresholds = setup_thresholds(x_ref, od_info)
-    # It is up to the user to select which thresholds to run - for demonstration, we will run the first one of them
-    threshold = thresholds[0]
+    threshold_index = config.get("threshold_index", 0)
+    if threshold_index < 0 or threshold_index >= len(thresholds):
+        raise ValueError(
+            f"threshold_index={threshold_index} is out of range [0, {len(thresholds) - 1}]"
+        )
+    threshold = thresholds[threshold_index]
 
     print(f"\nTesting threshold = {threshold}")
     print("-" * 100)
@@ -2069,17 +2140,17 @@ def main(data_dir):
         t_0,
         od_info,
         v_ref,
-        c1_init=1e3,
-        c2_init=1e3,
-        beta_penalty=4.0,
+        c1_init=config["alm"]["c1_init"],
+        c2_init=config["alm"]["c2_init"],
+        beta_penalty=config["alm"]["beta_penalty"],
         tolerance=tolerance,
     )
 
     result = optimizer.optimize(
-        max_outer_iter=20,
-        max_inner_iter=200,
-        stagnation_tol=1e-6,
-        stagnation_window=3,
+        max_outer_iter=config["alm"]["max_outer_iter"],
+        max_inner_iter=config["alm"]["max_inner_iter"],
+        stagnation_tol=config["alm"]["stagnation_tol"],
+        stagnation_window=config["alm"]["stagnation_window"],
     )
 
     opt_cpu_time = time.process_time() - opt_cpu_start
@@ -2115,4 +2186,5 @@ def main(data_dir):
 
 if __name__ == "__main__":
     args = parse_args()
-    main(args.data_dir)
+    cfg = load_config(args.config)
+    main(cfg)

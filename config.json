@@ -1,0 +1,17 @@
+{
+  "data_dir": "two_corridor",
+  "rank": 50,
+  "tolerance": 0.0001,
+  "threshold_index": 0,
+  "demand_file": null,
+  "link_perf_file": null,
+  "alm": {
+    "c1_init": 1000.0,
+    "c2_init": 1000.0,
+    "beta_penalty": 4.0,
+    "max_outer_iter": 20,
+    "max_inner_iter": 200,
+    "stagnation_tol": 0.000001,
+    "stagnation_window": 3
+  }
+}
