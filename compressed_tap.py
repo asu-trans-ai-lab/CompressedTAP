@@ -605,6 +605,7 @@ class ALM:
         c2_init=1e5,
         beta_penalty=10.0,
         tolerance=0.1,
+        random_state=42,
     ):
         self.B1 = decomp["B1"]
         # Ensure B2 exists; default to empty (n_minor x m_links) sparse matrix when missing
@@ -707,6 +708,10 @@ class ALM:
         self.beta_penalty = beta_penalty
         self.tolerance = tolerance
         self.MAX_PENALTY = 1e20
+
+        # Dedicated RNG so the cold-start symmetry-breaking noise is reproducible
+        # (mirrors the random_state=42 already used for the SVD compression).
+        self.rng = np.random.default_rng(random_state)
 
         # Track previous violations for adaptive penalty updates
         self.prev_od_viol = None
@@ -963,7 +968,7 @@ class ALM:
                     y = y.toarray().flatten()
 
                 # Add small noise to break symmetry
-                y += np.random.uniform(0, 0.01, size=self.s)
+                y += self.rng.uniform(0, 0.01, size=self.s)
             else:
                 print(f"  Using cold start for optimization (0.0, {self.k} OD pairs)")
                 y = np.zeros(self.s)
