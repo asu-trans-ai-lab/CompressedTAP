@@ -962,7 +962,7 @@ class ALM:
         # Overall MAE and RMSE
         od_mae = mean_abs_viol
 
-        # R² metric for multi-path OD flows
+        # R^2 metric for multi-path OD flows
         ss_res = np.sum((od_flow - self.d_multi) ** 2)
         ss_tot = np.sum((self.d_multi - np.mean(self.d_multi)) ** 2)
         od_r2 = 1 - ss_res / (ss_tot + 1e-10)
@@ -1081,12 +1081,12 @@ class ALM:
             od_flow = self.A1 @ y
         od_error = od_flow - self.d_multi
 
-        # ALM terms for OD constraints: lambda_od^T * g + c/2 * ||g||²
+        # ALM terms for OD constraints: lambda_od^T * g + c/2 * ||g||^2
         od_lagrangian = self.lambda_od.T @ od_error
         od_penalty = 0.5 * self.c1 * np.sum(od_error**2)
 
-        # Non-negativity constraints for minor paths: U_r*z ≥ 0 (only if minor paths exist)
-        # Formula: (1/2c) * {(max{0, mu - c·[U_r z]})² - mu²}
+        # Non-negativity constraints for minor paths: U_r*z >= 0 (only if minor paths exist)
+        # Formula: (1/2c) * {(max{0, mu - c·[U_r z]})^2 - mu^2}
         if self.r > 0:
             max_term_minor = np.maximum(0, self.mu - self.c2 * u)
             minor_penalty_term = (1.0 / (2.0 * self.c2)) * (
@@ -1650,7 +1650,7 @@ class ALM:
         print("AUGMENTED LAGRANGIAN METHOD (KKT PROJECTION + STAGNATION)")
         print(f"{'=' * 116}")
         print(
-            f"{'Outer':>6} {'Inner':>6} {'Status':>6} {'Objective':>12} {'OD Viol':>10} {'Minor Viol':>11} {'c1':>10} {'c2':>10} {'Link Vol R²':>8} {'Inner(s)':>10} {'Outer(s)':>10}"
+            f"{'Outer':>6} {'Inner':>6} {'Status':>6} {'Objective':>12} {'OD Viol':>10} {'Minor Viol':>11} {'c1':>10} {'c2':>10} {'Link Vol R^2':>8} {'Inner(s)':>10} {'Outer(s)':>10}"
         )
         print(f"{'-' * 116}")
 
@@ -1778,7 +1778,7 @@ def setup_thresholds(x_ref, od_info=None, num_bins=10):
     print(f"  Paths that CAN be minor: {len(can_be_minor_indices)}")
 
     # STEP 1: Find maximum number of minor paths
-    # Key insight: Each OD must have ≥1 major path
+    # Key insight: Each OD must have >=1 major path
     # For an OD with N paths, we can have at most N-1 minor paths
     # Therefore: max_minor_paths = sum(N-1) for all multi-path ODs
     #          = total_paths - num_multi_path_ODs
@@ -1791,7 +1791,7 @@ def setup_thresholds(x_ref, od_info=None, num_bins=10):
     print(f"  # Paths in multi-path ODs: {len(multi_path_indices)}")
     print(f"  Flow range: [{np.min(multi_path_flows):.2f}, {max_multi_flow:.2f}]")
     print("\nSTEP 1: Maximum number of minor paths")
-    print("  Each OD must have ≥1 major path")
+    print("  Each OD must have >=1 major path")
     print("  For OD with N paths: max N-1 minor paths")
     print(f"  Total paths in multi-ODs: {len(multi_path_indices)}")
     print(f"  # Multi-path ODs: {len(multi_path_ods)}")
@@ -1949,7 +1949,7 @@ def print_compression_stats(svd_dict, n_minor, n_major):
     compression_ratio = n_minor / r if (n_minor > 0 and r > 0) else float("inf")
     if n_minor > 0:
         print(
-            f"  SVD: {n_minor} minor paths → {r} latent variables (compression: {compression_ratio:.2f}x, time: {svd_time:.3f}s)"
+            f"  SVD: {n_minor} minor paths -> {r} latent variables (compression: {compression_ratio:.2f}x, time: {svd_time:.3f}s)"
         )
     print(
         f"  Total decision variables: {total_vars} (vs {n_major + n_minor} original paths)"
@@ -2003,7 +2003,7 @@ def print_od_violation_analysis(optimizer, result, gamma):
     od_details = optimizer.get_od_violation_details(result["y"], result["z"], gamma)
     print("  OD Constraint Details:")
     print("    Accuracy Metrics:")
-    print(f"      R²: {od_details['od_r2']:.6f}")
+    print(f"      R^2: {od_details['od_r2']:.6f}")
     print(f"      MAE: {od_details['od_mae']:.6f}")
     print(f"      RMSE: {od_details['od_rmse']:.6f}")
     print("    Violation Metrics:")
@@ -2073,9 +2073,9 @@ def print_summary(summary):
         f"    Reference Objective Diff raw iterate (diagnostic only, may be negative "
         f"when infeasible): {summary['ref_obj_rel_diff_raw']:+.6f}%"
     )
-    print(f"    Link Volume R²: {summary['link_r2']:.6f}, MAE: {summary['link_mae']:.6f}")
+    print(f"    Link Volume R^2: {summary['link_r2']:.6f}, MAE: {summary['link_mae']:.6f}")
     print(
-        f"    Travel Time R²: {summary['travel_time_r2']:.6f}, MAE: {summary['travel_time_mae']:.6f}"
+        f"    Travel Time R^2: {summary['travel_time_r2']:.6f}, MAE: {summary['travel_time_mae']:.6f}"
     )
     print(
         f"    CPU Time: SVD={summary['svd_time']:.6f}s, Optimization={summary['opt_cpu_time']:.6f}s"
