@@ -1,12 +1,12 @@
 # Compressed Traffic Assignment with Augmented Lagrangian Method
 
-This repository contains the complete implementation for the submitted manuscript: **["Compressed Traffic Assignment with Augmented Lagrangian Method"](https://arxiv.org/abs/2604.23101)**.
+This repository contains the complete implementation for the submitted manuscript: ***["Compressed Traffic Assignment with Augmented Lagrangian Method"](https://arxiv.org/abs/2604.23101)***.
 
 This work proposes a compressed representation of the path-flow space using low-rank Singular Value Decomposition (SVD), effectively projecting the high-dimensional path-flow variables onto a compact subspace. It separates paths into major
 paths (retained explicitly) and minor paths (captured implicitly via the low-rank basis),
 drastically reducing the number of decision variables.
 
-The resulting compressed problem is solved using an Augmented Lagrangian Method, which
+The resulting compressed problem is solved using an Augmented Lagrangian Method (ALM), which
 handles OD flow conservation constraints and non-negativity of compressed path flows as soft
 penalties. The dual multipliers are updated iteratively in an outer loop, while each inner
 subproblem is solved efficiently with L-BFGS-B — a quasi-Newton method well-suited for
@@ -73,7 +73,7 @@ Therefore $-U_r'(\mu + c_2 h^+) \equiv -U_r' \phi$.
 | $\nabla_y L_c = B_1 g_v + A_1'(\lambda + c_1\delta)$ | `grad_y = B1 @ grad_v + A1.T @ (lambda_od + c1 * od_error)` |
 | $\nabla_z L_c = D' g_v + M'(\lambda + c_1\delta) - U_r'\phi$ | `grad_z = D.T @ grad_v + M.T @ (lambda_od + c1 * od_error) - U_r.T @ max_term_minor` |
 
-The implementation is fully consistent with the paper. Besides, the code also includes three other gradient implementations for testing and benchmarking purposes. Please refer to **[E. Gradients Computation and Overhead](https://arxiv.org/abs/2604.23101)** for complexity analysis and performance comparison.
+The implementation is fully consistent with the paper. Besides, the code also includes three other gradient implementations for testing and benchmarking purposes. Please refer to ***[E. Gradients Computation and Overhead](https://arxiv.org/abs/2604.23101)*** for complexity analysis and performance comparison.
 
 1. `objective_and_gradient_chain_rule`
 2. `objective_and_gradient_factored`
@@ -94,7 +94,7 @@ Place GMNS-format input files under `data/<network>/`:
 | `demand.csv` | OD demand matrix (optional; inferred from path flows (columns.csv) if absent) |
 | `columns.csv` | Route assignment generated from the reference user-equilibrium solver [(OpenDTA)](https://github.com/jdlph/OpenDTA) |
 
-The Chicago Sketch network is included at `data/chicago_sketch/`.
+Two sample networks are included at `data/`, namely `two_corridor` and `chicago_sketch`. More networks will be added in the future.
 
 ### Parameters
 
@@ -150,4 +150,4 @@ python compressed_tap.py --config path/to/your_config.json
 To run a different setup, edit `config.json` (or pass a different config file path).
 
 Results are printed to the console including link volume accuracy ($R^2$), OD
-conservation violation, minor path flow negativity violation, and Reference Objective Difference (%) against the reference solution.
+conservation violation, minor path flow non-negativity violation, and Reference Objective Difference (%) against the reference solution.

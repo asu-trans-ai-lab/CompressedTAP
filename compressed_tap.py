@@ -3,14 +3,14 @@ Compressed Traffic Assignment with Augmented Lagrangian Method (ALM)
 """
 
 import os
-import argparse
-import json
 
-# Reduce thread overhead for better wall-clock performance
+# Reduce thread overhead for better CPU time performance
 os.environ["OMP_NUM_THREADS"] = "1"
 os.environ["MKL_NUM_THREADS"] = "1"
 os.environ["OPENBLAS_NUM_THREADS"] = "1"
 
+import argparse
+import json
 import time
 import warnings
 from pathlib import Path
@@ -1924,8 +1924,8 @@ def print_od_violation_analysis(optimizer, result, gamma):
     print("  OD Constraint Details:")
     print("    Accuracy Metrics:")
     print(f"      R²: {od_details['od_r2']:.6f}")
-    print(f"      MAE: {od_details['od_mae']:.4f}")
-    print(f"      RMSE: {od_details['od_rmse']:.4f}")
+    print(f"      MAE: {od_details['od_mae']:.6f}")
+    print(f"      RMSE: {od_details['od_rmse']:.6f}")
     print("    Violation Metrics:")
     print(f"      Max violation: {od_details['max_violation_abs']:.7f}")
     print(f"      Mean violation: {od_details['mean_violation_abs']:.7f}")
