@@ -1,4 +1,4 @@
-instance,K_per_OD,engine,basis,eps_f,S_R,S_C,S_CR,S_RC,invocations,note
+instance,K_per_OD,engine,basis,eps_f,S_R,S_C,S_C|R,S_RC,invocations,note
 grid_K100,100,python,unweighted,5.1e-03,5.84,1.322,0.545,3.185,5,
 grid_K1000,1000,python,unweighted,1.33e-02,1.112,7.70,41.198,45.829,5,S_CR engine-dependent: C++ gives 0.401
 grid_K10000,10000,python,unweighted,1.40e-02,0.802,3.64,17.256,13.833,5,
