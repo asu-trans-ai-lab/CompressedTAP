@@ -1,0 +1,25 @@
+{
+  "dataset": "03_chicago_sketch",
+  "pool": "path_pool_K10.csv",
+  "table1_n": 903516,
+  "table1_ell": 81435,
+  "table1_match": false,
+  "reconciliation_note": "Table-1 instance (903516/81435) not found in the tree; author-directed substitute pool; Table 1 to be updated to this instance's true statistics.",
+  "frozen": "2026-07-17T02:52:08",
+  "sha256_path_pool_K10.csv": "7500b273b7f7ee1a439ef102299e72718966349601b6c23f4cdd9265d61de95c",
+  "sha256_link.csv": "4c91903c5eec6896aa02af1ad2f497553aea2bafb4b9d899c0fd5f58e0fb1773",
+  "sha256_demand.csv": "1b3c7b9444f9e56b38972beb40cef9db8cf0185e5d17272cdaab21b6298b9c2d",
+  "export_meta": {
+    "n": 903516,
+    "m": 2950,
+    "n_od": 81435,
+    "nnz": 15361017,
+    "r": 50,
+    "n_major": 126825,
+    "n_minor": 776691,
+    "svd_time_s": 11.61,
+    "pool_file": "path_pool_K10.csv",
+    "multi_path_only": 1,
+    "has_v0": 1
+  }
+}

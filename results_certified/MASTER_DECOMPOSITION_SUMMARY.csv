@@ -1,0 +1,22 @@
+instance,K_per_OD,engine,basis,eps_f,S_R,S_C,S_CR,S_RC,invocations,note
+grid_K100,100,python,unweighted,5.1e-03,5.84,1.322,0.545,3.185,5,
+grid_K1000,1000,python,unweighted,1.33e-02,1.112,7.70,41.198,45.829,5,S_CR engine-dependent: C++ gives 0.401
+grid_K10000,10000,python,unweighted,1.40e-02,0.802,3.64,17.256,13.833,5,
+grid_K100,100,cpp,unweighted,5.09e-03,n/a,n/a,0.397,n/a,5,C++ full mode misses floor
+grid_K1000,1000,cpp,unweighted,1.33e-02,1.582,0.120,0.401,0.634,5,complete C++ 2x2; S_RC = S_R x S_CR verified
+grid_K10000,10000,cpp,unweighted,1.39e-02,n/a,n/a,0.627,n/a,4,inv5 lost to session teardown
+atom_m10,10,cpp,unweighted_r12,9.23e-02,1.382,0.903,0.180,0.248,5,SVD decoder fails atom regime
+atom_m100,100,cpp,unweighted_r12,4.03e-01,n/a,n/a,0.281,n/a,5,
+atom_m1000,1000,cpp,unweighted_r12,4.24e-01,n/a,n/a,0.123,n/a,5,
+sioux_SFK10,6.71,python,unweighted,1.11e-04,1.487,0.728,0.562,0.836,5,
+sioux_SFK25,12.24,python,unweighted,1.01e-04,1.290,0.852,1.303,1.682,5,CROSSOVER: S_CR>1 at Kbar 12.2
+sioux_SFK60,23.90,python,unweighted,1.12e-04,1.519,0.925,1.212,1.840,5,S_RC 1.84 = best real-network combined
+sioux_SFK25_FC,12.24,python,flow-weighted,2.29e-05,1.472,0.272,0.578,0.851,5,floor 4.4x tighter; ratios at accuracy plain C cannot reach
+chicago_sketch,2.45,python,unweighted,4.50e-04,0.929,0.604,0.330,0.307,5,elimination-dominated regime; nothing pays
+chicago_sketch_FC,2.45,python,flow-weighted,4.81e-04,0.974,0.605,0.330,0.321,5,floor UNCHANGED vs unweighted (thin minor block) -> S_FC == S_C
+sketch_K10,11.09,cpp,unweighted,,,,,,5,QUEUED (e4 driver)
+sketch_K15,15.34,cpp,unweighted,,,,,,5,QUEUED
+regional_E0,7.48,cpp,unweighted,,,,,,5,QUEUED (substitute instance disclosed)
+atom_bundle,10-1000,cpp,mlgp_bundle,,,,,,5,QUEUED (S_latent vs GP)
+sioux_SFK120,42.49,python,unweighted,1.12e-04,2.375,0.687,0.978,2.322,5,S_R GROWS with richness (machinery not dimension); S_RC best certified 2.32x
+sioux_SFK120_FC,42.49,python,flow-weighted,2.17e-05,3.662,0.898,0.549,2.010,5,floor 5.2x tighter again; combined 2.0x at accuracy unweighted cannot reach

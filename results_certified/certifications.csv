@@ -1,0 +1,14 @@
+gate,script,cwd,verdict,gate_line,wall_s,timestamp,log
+stage0_5_chain,run_all_stages.py,stable_release,PASS,"6 stage(s) run, 0 failed",123.4,2026-07-16T00:15:04,logs/stage0_5_chain.log
+singleton_background,certify_singleton_background.py,stable_release\00_two_corridor,PASS,=> CERTIFIED,1.5,2026-07-16T00:15:05,logs/singleton_background.log
+cpp_engines_closedform,certify_cpp_solver.py,stable_release\00_two_corridor,PASS,=> CPP CERTIFIED,0.9,2026-07-16T00:15:06,logs/cpp_engines_closedform.log
+C1_kernel_parity,kernel_parity.py,stable_release\10_implementation,PASS,=> C1 KERNEL PARITY PASSED (88 checks),7.8,2026-07-16T00:15:14,logs/C1_kernel_parity.log
+evaluator,test_evaluator.py,source\updated_TAPLite\python,PASS,=> EVALUATOR CERTIFIED,1.4,2026-07-16T00:15:15,logs/evaluator.log
+fixtures_CDE,test_fixtures_cde.py,source\updated_TAPLite\python,PASS,=> FIXTURES C/D/E CERTIFIED,1.4,2026-07-16T00:15:17,logs/fixtures_CDE.log
+P3_sioux_regression,run_p3_sioux.py,source\updated_TAPLite\python,PASS,=> P3 SIOUX REGRESSION PASSED,14.0,2026-07-16T00:15:31,logs/P3_sioux_regression.log
+C2_cpp_r0,certify_cpp_r0.py,stable_release\10_implementation,PASS,=> C2 CPP R0 CERTIFIED,13.9,2026-07-16T00:15:45,logs/C2_cpp_r0.log
+C3_cpp_r1,certify_cpp_r1.py,stable_release\10_implementation,PASS,=> C3 CPP R1 CERTIFIED,10.8,2026-07-16T00:15:55,logs/C3_cpp_r1.log
+feasible_gap_snapshot,test_feasible_gap.py,TR_part B\CompressedTAP-feature-core,PASS,ALL CHECKS PASSED,2.1,2026-07-16T00:15:58,logs/feasible_gap_snapshot.log
+feasible_gap_networks_dev,test_feasible_gap_networks.py,git_dev\CompressedTAP,PASS,ALL NETWORKS PASSED,6.5,2026-07-16T00:16:04,logs/feasible_gap_networks_dev.log
+feasible_gap_dev,test_feasible_gap.py,git_dev\CompressedTAP,PASS,ALL CHECKS PASSED,2.2,2026-07-16T00:16:06,logs/feasible_gap_dev.log
+E2_ladder_smoke,run_e2_ladder.py --smoke,stable_release\06_sketch_real,PASS,"smoke anchor K=100: R0 py 6969583.74 cpp 6969583.74 (rel 1.8e-12), R1 py 6998235.96 cpp 6998235.97 (rel 1.2e-09) : PASS",10.6,2026-07-16T00:16:17,logs/E2_ladder_smoke.log
