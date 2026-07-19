@@ -1,0 +1,2 @@
+experiment,n_families,variants_per_family,n_equivalent_full_path_solutions,mean_path_flow_cv,link_flow_relative_std,objective_relative_range,grouped_representative_link_error,interpretation
+E3_regularization,8,12,100,0.9053416557551769,6.440855035347032e-16,2.3384117961068256e-15,6.221533192829623e-16,Large path-flow variability with essentially invariant link flow and objective; grouped atoms choose one stable representative.

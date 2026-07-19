@@ -1,0 +1,12 @@
+net,basis,rank,floor,note
+sketch,U,50,4.4307e-04,eps_U reference
+sketch,U,20,4.4936e-04,
+sketch,U,10,4.5257e-04,
+sketch,U,5,4.5448e-04,
+sketch,U,2,4.5864e-04,
+sketch,W,50,4.3102e-04,
+sketch,W,20,4.3959e-04,
+sketch,W,10,4.4344e-04,
+sketch,W,6,4.4349e-04,smallest weighted rank matching eps_U (r_W=6)
+sketch,W,2,4.5320e-04,
+sketch,TIMING,skipped,4.4307e-04,17464 ODs: timing not needed (boundary case; compression floor near-flat -> elimination dominates S_R~11.6)

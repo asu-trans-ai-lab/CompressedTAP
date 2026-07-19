@@ -1,0 +1,38 @@
+{
+  "experiment": "Step2A_frozen_mechanism_32case",
+  "script_sha256": "dd4cb10b79e84b6fb26b1519a373210d3392a585c01a0ef426be04b005b11c0c",
+  "seed": 7,
+  "grid": {
+    "n_od": [
+      1,
+      2
+    ],
+    "k_per_od": [
+      10,
+      25
+    ],
+    "rank": [
+      2,
+      5
+    ],
+    "concentration": [
+      0.5,
+      2.5
+    ],
+    "perturbation": [
+      0.0,
+      0.1
+    ]
+  },
+  "solver": "SLSQP",
+  "ftol": 1e-11,
+  "maxiter": 3000,
+  "major_per_od": 1,
+  "groups_per_od": "max(1, rank)",
+  "eps_report_gap_pct": 1e-08,
+  "python": "3.12.3 (main, Mar  3 2026, 12:15:18) [GCC 13.3.0]",
+  "numpy": "2.4.4",
+  "scipy": "1.17.1",
+  "platform": "Linux-6.18.5-x86_64-with-glibc2.39",
+  "status": "FROZEN \u2014 mechanism experiment; do not modify algorithm for nicer numbers"
+}

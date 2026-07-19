@@ -1,0 +1,72 @@
+{
+  "passed": true,
+  "checks": [
+    {
+      "name": "E1 rows present",
+      "passed": true,
+      "details": "rows=16"
+    },
+    {
+      "name": "E1 all solves succeeded",
+      "passed": true,
+      "details": "all success flags must be true"
+    },
+    {
+      "name": "E1 weighted SVD accuracy dominates at fixed rank",
+      "passed": true,
+      "details": "weighted better/equal in 4/4 K cases"
+    },
+    {
+      "name": "E2 grouped online storage is below R0 at largest K",
+      "passed": true,
+      "details": "grouped=5968 bytes, R0=81648 bytes"
+    },
+    {
+      "name": "E3 path-flow variability is material",
+      "passed": true,
+      "details": "CV=0.834908"
+    },
+    {
+      "name": "E3 link flows are invariant",
+      "passed": true,
+      "details": "relative std=1.824e-16"
+    },
+    {
+      "name": "E3 objective is invariant",
+      "passed": true,
+      "details": "relative range=6.223e-16"
+    },
+    {
+      "name": "E3 grouped representative preserves links",
+      "passed": true,
+      "details": "error=3.604e-16"
+    },
+    {
+      "name": "E4 adaptive gap is monotone",
+      "passed": true,
+      "details": "gaps=[0.10764353984646366, 0.07566764973871741, 0.03810382475804353, 0.0]"
+    },
+    {
+      "name": "E4 reaches numerical full-model accuracy",
+      "passed": true,
+      "details": "final gap=0.000e+00%"
+    },
+    {
+      "name": "E4 uses fewer variables than R0",
+      "passed": true,
+      "details": "adaptive=7, R0=46"
+    },
+    {
+      "name": "E5 weighted SVD dominates unweighted across scenarios",
+      "passed": true,
+      "details": "weighted better/equal in 3/3 scenarios"
+    },
+    {
+      "name": "E5 preprocessing amortizes monotonically",
+      "passed": true,
+      "details": "all representations"
+    }
+  ],
+  "warnings": [],
+  "note": "Wall-clock timings are reported but excluded from hard validation."
+}
