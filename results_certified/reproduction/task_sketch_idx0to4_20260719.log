@@ -1,0 +1,40 @@
+=== index 0 ===
+Testing threshold = 0.0
+ Outer  Inner Status    Objective    OD Viol  Minor Viol         c1         c2 Link Vol R^2   Inner(s)   Outer(s)
+      R^2: 1.000000
+    Reference Objective Diff (feasible): +0.090003%
+    Link Volume R^2: 0.996447, MAE: 70.506307
+    Travel Time R^2: 0.999486, MAE: 0.021901
+    Variables reduced by: 0.00%
+=== index 1 ===
+Testing threshold = 0.138533
+ Outer  Inner Status    Objective    OD Viol  Minor Viol         c1         c2 Link Vol R^2   Inner(s)   Outer(s)
+      R^2: 1.000000
+    Reference Objective Diff (feasible): +0.140016%
+    Link Volume R^2: 0.995704, MAE: 75.690450
+    Travel Time R^2: 0.999282, MAE: 0.025269
+    Variables reduced by: 5.80%
+=== index 2 ===
+Testing threshold = 0.186655
+ Outer  Inner Status    Objective    OD Viol  Minor Viol         c1         c2 Link Vol R^2   Inner(s)   Outer(s)
+      R^2: 1.000000
+    Reference Objective Diff (feasible): +0.142993%
+    Link Volume R^2: 0.995663, MAE: 75.546902
+    Travel Time R^2: 0.999245, MAE: 0.025569
+    Variables reduced by: 11.72%
+=== index 3 ===
+Testing threshold = 0.250897
+ Outer  Inner Status    Objective    OD Viol  Minor Viol         c1         c2 Link Vol R^2   Inner(s)   Outer(s)
+      R^2: 1.000000
+    Reference Objective Diff (feasible): +0.135159%
+    Link Volume R^2: 0.995801, MAE: 74.068766
+    Travel Time R^2: 0.999287, MAE: 0.024918
+    Variables reduced by: 17.63%
+=== index 4 ===
+Testing threshold = 0.340533
+ Outer  Inner Status    Objective    OD Viol  Minor Viol         c1         c2 Link Vol R^2   Inner(s)   Outer(s)
+      R^2: 1.000000
+    Reference Objective Diff (feasible): +0.129881%
+    Link Volume R^2: 0.995873, MAE: 72.646410
+    Travel Time R^2: 0.999328, MAE: 0.024285
+    Variables reduced by: 23.55%

@@ -1,0 +1,11 @@
+network,tau,threshold_index,variable_reduction_pct,ref_obj_diff_feasible_pct,code_version,source_evidence
+chicago_sketch,0,0,0.0,0.090003,dev_684fb32,evidence/task_bsxwwpvz3.log
+chicago_sketch,0.138533,1,5.80,0.140016,dev_684fb32,evidence/task_sketch_idx0to4_20260719.log
+chicago_sketch,0.186655,2,11.72,0.142993,dev_684fb32,evidence/task_sketch_idx0to4_20260719.log
+chicago_sketch,0.250897,3,17.63,0.135159,dev_684fb32,evidence/task_sketch_idx0to4_20260719.log
+chicago_sketch,0.340533,4,23.55,0.129881,dev_684fb32,evidence/task_sketch_idx0to4_20260719.log
+chicago_sketch,0.46,5,29.47,0.115508,dev_684fb32,evidence/task_bsxwwpvz3.log
+chicago_sketch,0.676579,6,35.39,0.109522,dev_684fb32,evidence/task_b42u60fmx.log
+chicago_sketch,1.05531,7,41.30,0.080958,dev_684fb32,evidence/task_b42u60fmx.log
+chicago_sketch,1.89177,8,47.22,0.058482,dev_684fb32,evidence/task_b42u60fmx.log
+chicago_sketch,4.54059,9,53.14,0.037073,dev_684fb32,evidence/task_b42u60fmx.log
