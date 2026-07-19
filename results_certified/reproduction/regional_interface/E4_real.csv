@@ -1,0 +1,3 @@
+experiment,network,policy,round,promoted_paths,n_variables,objective_gap_pct,link_rel_l2,largest_within_group_gradient_mismatch,solve_seconds,R0_variables,R0_solve_seconds
+E4_real,ChicagoRegional,greedy-mismatch,0,0,6,1.2597980207692997e-11,2.572374159666818e-13,0.0,0.0015305000124499202,93,0.026663600001484156
+E4_real,ChicagoRegional,rollout-lookahead,0,0,6,1.2597980207692997e-11,2.572374159666818e-13,nan,0.0009550999966450036,93,0.026663600001484156

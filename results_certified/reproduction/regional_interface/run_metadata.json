@@ -1,0 +1,21 @@
+{
+  "network": "chicago-regional",
+  "seed": 7,
+  "n_od": 3,
+  "k_values": [
+    8,
+    16,
+    32,
+    64
+  ],
+  "factory_metadata": {
+    "flow_unit_veh_per_h": 755.3704605526322,
+    "time_unit_min": 1.25675807286114,
+    "network": "ChicagoRegional",
+    "n_od": 3,
+    "k_per_od": 32,
+    "n_used_links": 965,
+    "demand_scale": 10.287413208906376,
+    "nominal_max_vc_prescale": 0.10206647469851388
+  }
+}

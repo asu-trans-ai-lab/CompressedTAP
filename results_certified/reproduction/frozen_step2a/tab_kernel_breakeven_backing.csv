@@ -1,0 +1,17 @@
+table_cell,value,source_file,source_column,grouped_gap_pct
+SiouxFalls K=8 kernel speedup,0.75,real/results_sioux_falls/E1_E2_real.csv,kernel_speedup_vs_R0,6.882e-11
+SiouxFalls K=16 kernel speedup,0.94,real/results_sioux_falls/E1_E2_real.csv,kernel_speedup_vs_R0,-1.353e-13
+SiouxFalls K=32 kernel speedup,1.06,real/results_sioux_falls/E1_E2_real.csv,kernel_speedup_vs_R0,-1.118e-11
+SiouxFalls K=64 kernel speedup,1.46,real/results_sioux_falls/E1_E2_real.csv,kernel_speedup_vs_R0,3.436e-12
+ChicagoSketch K=8 online KiB (R0-full),13.3,real/results_chicago_sketch/E1_E2_real.csv,online_bytes,
+ChicagoSketch K=8 kernel speedup,0.87,real/results_chicago_sketch/E1_E2_real.csv,kernel_speedup_vs_R0,-1.569e-10
+ChicagoSketch K=8 online KiB (R1-G-grouped-atom),8.5,real/results_chicago_sketch/E1_E2_real.csv,online_bytes,
+ChicagoSketch K=16 online KiB (R0-full),66.1,real/results_chicago_sketch/E1_E2_real.csv,online_bytes,
+ChicagoSketch K=16 kernel speedup,1.10,real/results_chicago_sketch/E1_E2_real.csv,kernel_speedup_vs_R0,1.101e-10
+ChicagoSketch K=16 online KiB (R1-G-grouped-atom),19.4,real/results_chicago_sketch/E1_E2_real.csv,online_bytes,
+ChicagoSketch K=32 online KiB (R0-full),337.1,real/results_chicago_sketch/E1_E2_real.csv,online_bytes,
+ChicagoSketch K=32 kernel speedup,2.34,real/results_chicago_sketch/E1_E2_real.csv,kernel_speedup_vs_R0,-6.851e-09
+ChicagoSketch K=32 online KiB (R1-G-grouped-atom),47.4,real/results_chicago_sketch/E1_E2_real.csv,online_bytes,
+ChicagoSketch K=64 online KiB (R0-full),1470.7,real/results_chicago_sketch/E1_E2_real.csv,online_bytes,
+ChicagoSketch K=64 kernel speedup,8.50,real/results_chicago_sketch/E1_E2_real.csv,kernel_speedup_vs_R0,-3.290e-06
+ChicagoSketch K=64 online KiB (R1-G-grouped-atom),101.5,real/results_chicago_sketch/E1_E2_real.csv,online_bytes,

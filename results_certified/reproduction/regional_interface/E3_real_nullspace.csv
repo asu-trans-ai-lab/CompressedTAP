@@ -1,0 +1,6 @@
+experiment,network,k_per_od,n_paths,n_used_links,nullspace_dim,identifiable,active_support_nullspace_dim,n_equivalent_solutions,path_flow_cv,max_link_rel_variation,max_objective_rel_variation
+E3_real_nullspace,ChicagoRegional,8,24,269,0,True,,,,,
+E3_real_nullspace,ChicagoRegional,16,48,520,0,True,,,,,
+E3_real_nullspace,ChicagoRegional,32,96,1224,0,True,,,,,
+E3_real_nullspace,ChicagoRegional,64,192,3399,0,True,,,,,
+E3_real_equivalence,ChicagoRegional,64,,,,,0,5,0.43654047020598613,0.00018056697331679717,2.2751185473828485e-07
