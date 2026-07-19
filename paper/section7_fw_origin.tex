@@ -102,24 +102,56 @@ The method thus solves the original convex assignment problem over a
 compressed convex \emph{inner approximation} $\mathcal X_G \subseteq \mathcal
 X$ of the path-flow feasible region.
 
-\subsection{Frank--Wolfe Retains Its Convex-Combination Interpretation}
+\subsection{Two Latent Solvers: L\,$+$\,FW and L\,$+$\,PG}
 \label{sec:fw-interpretation}
 
 Because the feasible set of \eqref{eq:compressed-fw} is a product of OD
-simplices, the FW linearization step
+simplices, any solver for smooth convex optimization over this constraint
+geometry applies to the latent representation unchanged. We state the two
+that we implement and certify.\footnote{Reference implementations:
+\texttt{fw\_origin\_compression.py} (latent FW with exact BPR line search and
+the origin-block variant) and \texttt{latent\_projected\_gradient.py} (latent
+projected gradient, about $90$ lines on top of the shared representation
+layer), both in \texttt{compressed\_TAP\_repro\_package\_v3\_1\_LPG/repro/fw/src/};
+a C++ Barzilai--Borwein projected-gradient kernel operating on the exported
+\texttt{group.csv} representation is in \texttt{repro/cpp/tapkernel.cpp}.
+Both Python solvers share the atom set, the latent gradient, the simplex
+feasible set, and the FW duality-gap stopping certificate.}
+
+\emph{Latent Frank--Wolfe} (L\,$+$\,FW). At iterate $z^k$ with link flows
+$v^k = \bar B' z^k + v_0$, the linearization step
 \begin{equation*}
 w^k \in \arg\min_{w \in \mathcal Z}\; \nabla_z f\bigl(\bar B' z^k + v_0\bigr)' w
 \end{equation*}
 decomposes by OD pair into the standard minimum-cost column selection --- the
 same linear minimization oracle as in classical path-based FW, now over major
 columns and family columns priced by $\bar b_{ik}' t(v^k)$. The update
-$z^{k+1} = (1 - \alpha_k) z^k + \alpha_k w^k$ with $\alpha_k \in [0,1]$ stays
-in $\mathcal Z$ by convexity, and in original path-flow coordinates
+$z^{k+1} = (1 - \alpha_k) z^k + \alpha_k w^k$, with $\alpha_k$ from an exact
+BPR line search on $[0,1]$, stays in $\mathcal Z$ by convexity, and in
+original path-flow coordinates
 \begin{equation*}
 x^{k+1} = G z^{k+1} = (1 - \alpha_k)\, x^k + \alpha_k\, G w^k ,
 \end{equation*}
 so every iterate remains a convex combination of feasible path-flow
-assignments of the original problem. The representation does not introduce a
+assignments of the original problem.
+
+\emph{Latent projected gradient} (L\,$+$\,PG). The same latent gradient
+$g^k = \bar B\, t(\bar B' z^k + v_0)$ instead drives a projected-gradient
+update on the product of OD simplices,
+\begin{equation*}
+z^{k+1} = \Pi_{\mathcal Z}\bigl( z^k - \gamma_k\, g^k \bigr),
+\end{equation*}
+where $\Pi_{\mathcal Z}$ is the Euclidean projection (computed independently
+per OD simplex in $O(K \log K)$), and $\gamma_k$ is a safeguarded
+Barzilai--Borwein trial step with Armijo backtracking on the projected
+direction. We deliberately do not call this method a reduced-gradient
+algorithm: there is no basis, no elimination, and no reduced costs --- only
+projection onto the same demand simplices that L\,$+$\,FW uses. Both solvers
+stop on the identical FW duality gap, computed from the same linear
+minimization oracle, so accuracy is matched by construction.
+Feasibility of every L\,$+$\,PG iterate follows from
+Proposition~\ref{prop:convexity-preservation}(a) exactly as for L\,$+$\,FW:
+$z^{k+1} \in \mathcal Z$ implies $x^{k+1} = G z^{k+1} \in \mathcal X$. The representation does not introduce a
 signed decoder or a nonconvex latent model: it replaces selected path columns
 by feasible convex combinations of path columns, preserving the convex
 feasible region, the convex Beckmann objective, and the classical
@@ -235,14 +267,11 @@ geometry applies. A dedicated study\footnote{%
 \texttt{results/solver\_portability/solver\_portability.csv} and the recorded
 run of \texttt{repro/interface/integrated\_check.py}. Wall-clock ratios are
 hardware-dependent single-thread recordings; objective values, representation
-gaps, and residuals are deterministic.} tests this by adding exactly one
-component --- a second update operator --- and changing nothing else: a
-\emph{latent projected gradient} (LPG) method that shares with latent FW the
-atom set, the latent gradient $\bar B\, t(\bar B' z + v_0)$, the OD demand
-simplices, the objective, and even the stopping certificate (the identical FW
-duality gap, computed from the same linear minimization oracle). The update is
-a Euclidean simplex projection with a safeguarded Barzilai--Borwein trial step
-and Armijo backtracking on the projected direction. The protocol enforces
+gaps, and residuals are deterministic.} tests this by comparing the two
+solvers of Section~\ref{sec:fw-interpretation} --- L\,$+$\,FW and
+L\,$+$\,PG --- which differ in exactly one component, the update operator,
+while sharing the atom set, the latent gradient, the OD demand simplices, the
+objective, and the duality-gap stopping certificate. The protocol enforces
 matched accuracy per representation: the restricted optimum $f^*_\rho$ of each
 representation is first computed to duality gap $10^{-10}$, each timed run
 stops at first crossing of $f^*_\rho(1 + 10^{-6})$, speedups are
@@ -260,7 +289,7 @@ C (no explicit major). Recorded single-thread runs.}
 \label{tab:solver-portability}
 \begin{tabular}{rrrrr}
 \toprule
-$K$ & PG speedup & FW speedup & RC gap (\%) & C gap (\%) \\
+$K$ & L\,$+$\,PG speedup & L\,$+$\,FW speedup & RC gap (\%) & C gap (\%) \\
 \midrule
 8   & $1.02\times$ & $1.00\times$ & 0.00 & 0.00 \\
 32  & $1.17\times$ & $1.07\times$ & 1.19 & 2.89 \\
@@ -289,22 +318,71 @@ doubled demand): pure latent C --- convex atoms with nominal shares and no
 explicit major --- fails by $149.8\%$, because nominal-share convex
 combinations cannot concentrate mass on the dominant path; a single explicit
 major per OD (RC) repairs this to $0.53\%$, with within-solver E/RC speedups
-of $95\times$ (FW) and $4.3\times$ (PG) on that instance. On the
+of $95\times$ (L\,$+$\,FW) and $4.3\times$ (L\,$+$\,PG) on that instance. On the
 anchor-supported Sioux Falls instance all representations are exact and both
 solvers converge essentially immediately.
 
 Finally, an integrated five-solver acceptance check runs one exported
 problem-layer instance through SLSQP on the anchor-eliminated grouped decoder,
 the C++ projected-gradient kernel, FW on the interface atoms, FW on the full
-path pool, and LPG on the same interface atoms, and requires agreement of
-their optima. On the spread-demand Chicago instance, LPG matches the SLSQP
+path pool, and L\,$+$\,PG on the same interface atoms, and requires agreement of
+their optima. On the spread-demand Chicago instance, L\,$+$\,PG matches the SLSQP
 reference to $3.7 \times 10^{-14}$ relative --- on the identical atoms where
 vanilla FW's sublinear tail stops at $9.8 \times 10^{-5}$. The verified
 equivalence chain thus reads: ALM $=$ simplex projected gradient $=$
-reduced gradient $=$ FW $=$ LPG, all through the standard problem-layer
+reduced gradient $=$ L\,$+$\,FW $=$ L\,$+$\,PG, all through the standard problem-layer
 interface, certified by a common duality gap. This is the operational content
 of Proposition~\ref{prop:convexity-preservation}: one convex representation,
 many interchangeable solvers.
+
+\subsection{Beyond Traffic: Major--Latent Prototypes for General Column Pools}
+\label{sec:beyond-traffic}
+
+Nothing in Proposition~\ref{prop:convexity-preservation} is specific to
+traffic assignment: the argument uses only that the decision vector is a
+nonnegative combination of columns, that the observable quantity is linear in
+the decisions, and that the objective is convex in the observable. Two small
+prototypes\footnote{\texttt{major\_latent\_prototypes/} (LP-relaxation
+prototypes, \texttt{examples/run\_all.py}); deterministic column counts and
+relative errors verified by a fresh run on 2026-07-18. The prototypes
+deliberately exclude branch-and-price, integer recovery, and software
+integration; they test only the representation layer.} exercise the same
+representation, $x = Wz$ with effective matrix $\widetilde B = BW$ and cost
+$\widetilde c = W' c$ (the operator $W$ is the general-column-pool analogue of
+$G$ in \eqref{eq:G-reconstruction}), on classical column-pool linear programs:
+cutting stock, where the original columns are cutting patterns, and unit
+commitment, where the original columns are feasible generator schedules. Each
+prototype compares the full explicit pool (E), fully latent convex atoms with
+no explicit major columns (C), and explicit majors plus latent minor atoms
+(RC).
+
+\begin{table}[htbp]
+\centering
+\caption{Beyond-traffic prototypes (LP relaxations): column counts and
+relative objective error of the compressed representations versus the full
+explicit pool.}
+\label{tab:beyond-traffic}
+\begin{tabular}{lrrrrr}
+\toprule
+Problem & E cols & C cols & RC cols & C error (\%) & RC error (\%) \\
+\midrule
+Cutting stock   & 10  & 5  & 8  & 4.51 & 0.00 \\
+Unit commitment & 162 & 18 & 24 & 5.60 & 0.38 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+The pattern of Table~\ref{tab:beyond-traffic} reproduces, in miniature, the
+support mechanism of Section~\ref{sec:solver-portability}: pure latent
+compression (C) incurs a visible objective error because frozen convex shares
+cannot concentrate weight on the dominant columns, while retaining a few
+explicit major columns (RC) recovers the optimum to $0.00\%$ and $0.38\%$ at
+$5\times$ and $7\times$ column reduction, respectively. Feasibility residuals
+are at machine precision in all cases, as the convexity argument requires.
+These prototypes support the broader claim of the concluding section: the
+major--latent construction is a representation-layer device for column-pool
+convex programs in general, with traffic assignment as its most developed
+instance.
 
 \subsection{Summary Statement}
 \label{sec:fw-origin-summary}

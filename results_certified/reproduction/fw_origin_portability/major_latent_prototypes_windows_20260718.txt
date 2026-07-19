@@ -1,0 +1,12 @@
+
+=== Cutting stock ===
+columns H0/C/RC: 10/5/8
+objective H0/C/RC: 39.7217/41.5150/39.7217
+relative error C/RC: 4.51%/0.00%
+min coverage residual H0/C/RC: 0/-7.105e-15/0
+
+=== Unit commitment schedule pool ===
+columns H0/C/RC: 162/18/24
+objective H0/C/RC: 13585.0000/14346.3925/13637.1700
+relative error C/RC: 5.60%/0.38%
+min demand residual H0/C/RC: -2.842e-14/-2.842e-14/-1.421e-14
