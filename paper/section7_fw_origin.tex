@@ -1,24 +1,37 @@
-%% SECTION 7: convexity-preserving column-based extension (FW / origin methods).
-%% Added 2026-07-18. All reported numbers trace to
-%% compressed_TAP_repro_package_v1_1_FW_origin/fw_origin_extension/results/
-%% (reference_sioux/FW_controlled.csv, reference_sioux/ORIGIN_controlled.csv,
-%%  reference_sioux/cpp_kernel_sioux.csv, reference_chicago/cpp_kernel_chicago.csv).
+%% SECTION 7: convexity preservation + solver portability of the latent
+%% representation. Merged 2026-07-18/19 from the author's
+%% section7_portability.tex draft and the earlier convexity-preservation
+%% section. Backing:
+%%   compressed_TAP_repro_package_v3_1_LPG/repro/fw/results/solver_portability/
+%%     solver_portability.csv (the package's recorded Linux run, restored;
+%%     Windows re-run archived as solver_portability_windows_20260719.csv),
+%%     portability_ext.csv (K=2048, mirror descent, six-way instance check),
+%%     solver_portability_recorded_linux.csv (the package's original record);
+%%   .../fw/results/quick_final/ (FW-native controlled + CSR kernel);
+%%   compressed_TAP_repro_package_v1_1_FW_origin/fw_origin_extension/results/
+%%     (screening);
+%%   major_latent_prototypes/ (beyond-traffic).
+%% Wall-clock ratios: single-thread runs of 2026-07-19 on this machine.
+%% Deterministic quantities (gaps, iteration counts, residuals) reproduce
+%% the package's recorded values exactly.
 
-\section{A Convexity-Preserving Column-Based Extension: Frank--Wolfe and Origin-Decomposed Methods}
+\section{Convexity Preservation and Solver Portability of the Latent Representation}
 \label{sec:fw_origin}
 
-The grouped representation of Section~\ref{sec:grouped} was introduced as a
-constraint-compatible refinement of the compressed formulation solved by the AL
-method. In this section we show that the same construction carries a stronger
-and broader interpretation: it is a \emph{convexity-preserving reformulation}
-of the path-based problem, not merely a heuristic grouping device, and it is
-therefore directly compatible with classical feasible-direction methods ---
-Frank--Wolfe (FW) and origin-decomposed conditional gradient schemes --- whose
-theory rests on convex combinations of feasible assignments. The central
-observation is that each latent route family is a convex combination of
-feasible paths, the link-flow mapping remains linear, and the Beckmann
-objective remains convex; consequently every statement of the classical convex
-theory survives compression unchanged.
+The preceding sections establish the latent representation inside one
+solver family. This section establishes, first, that the representation
+is exact convex programming rather than heuristic grouping, and second,
+that it is not tied to any one solver. The grouped construction of
+Section~\ref{sec:grouped} is restated as a feasible \emph{atom}
+geometry, two further first-order methods --- Frank--Wolfe and a latent
+projected gradient --- are run on that geometry unchanged, and the
+speedup is measured under a matched-accuracy protocol across route
+richness up to the scale at which space-time columns live. The finding
+is stated at the outset because the experiments below are designed only
+to test it: \emph{the compression gain is a property of the
+representation layer, portable across linear-oracle,
+Euclidean-projection, and entropic update operators, and it grows with
+the ratio of route richness to latent dimension.}
 
 \subsection{Latent Route Families as Convex Combinations}
 \label{sec:latent-convex}
@@ -100,240 +113,270 @@ constraint set is a product of simplices.
 
 The method thus solves the original convex assignment problem over a
 compressed convex \emph{inner approximation} $\mathcal X_G \subseteq \mathcal
-X$ of the path-flow feasible region.
+X$ of the path-flow feasible region. Promotion preserves this structure:
+when exact pricing identifies a missing path $p^\star$ and appends its
+incidence vector as a new identity column of $G$, the represented regions
+nest, $\mathcal X_{G^{(0)}} \subseteq \mathcal X_{G^{(1)}} \subseteq \cdots
+\subseteq \mathcal X$, every intermediate problem remains convex, and the
+restricted optima decrease monotonically toward $f^\star$ --- the standard
+column-generation guarantee, inherited without modification because
+promotion never leaves the convex-combination framework.
 
-\subsection{Two Latent Solvers: L\,$+$\,FW and L\,$+$\,PG}
-\label{sec:fw-interpretation}
+\subsection{The Latent Atom Geometry}
+\label{sec:atom-geometry}
 
-Because the feasible set of \eqref{eq:compressed-fw} is a product of OD
-simplices, any solver for smooth convex optimization over this constraint
-geometry applies to the latent representation unchanged. We state the two
-that we implement and certify.\footnote{Reference implementations:
-\texttt{fw\_origin\_compression.py} (latent FW with exact BPR line search and
-the origin-block variant) and \texttt{latent\_projected\_gradient.py} (latent
-projected gradient, about $90$ lines on top of the shared representation
-layer), both in \texttt{compressed\_TAP\_repro\_package\_v3\_1\_LPG/repro/fw/src/};
-a C++ Barzilai--Borwein projected-gradient kernel operating on the exported
-\texttt{group.csv} representation is in \texttt{repro/cpp/tapkernel.cpp}.
-Both Python solvers share the atom set, the latent gradient, the simplex
-feasible set, and the FW duality-gap stopping certificate.}
+For OD pair $i$ with path set $\mathcal P_i$, an \emph{atom} is a fixed
+path-flow distribution
+\begin{equation}
+\label{eq:atom-def}
+\pi_{ik} \in \Delta(\mathcal P_i)
+= \Bigl\{\pi \ge 0 : \textstyle\sum_{p \in \mathcal P_i} \pi_p = 1\Bigr\},
+\qquad k \in \mathcal A_i,
+\end{equation}
+carrying a nonnegative mass $s_{ik}$. The path and link flows are
+\begin{equation}
+\label{eq:atom-decode}
+x_p = \sum_{k \in \mathcal A_i} s_{ik}\, \pi_{ikp},
+\qquad
+v = \bar v_0 + \sum_i \sum_{k \in \mathcal A_i} s_{ik}\, \bar b_{ik},
+\qquad
+\bar b_{ik} = \sum_{p} \pi_{ikp}\, b_p,
+\end{equation}
+with the aggregate columns $\bar b_{ik}$ precomputed as in
+\eqref{eq:aggregate-column}, and the masses constrained to the OD demand
+simplex
+\begin{equation}
+\label{eq:atom-simplex}
+s_i \in \Delta_{d_i}
+= \Bigl\{ s \ge 0 : \textstyle\sum_{k \in \mathcal A_i} s_{ik} = d_i
+\Bigr\}.
+\end{equation}
+Three representation classes are compared. \textbf{E} (explicit): one
+singleton atom per path, $|\mathcal A_i| = K$; this is the full path
+pool. \textbf{C} (pure latent): $m$ grouped atoms per OD with
+nominal-flow shares and no singleton, $|\mathcal A_i| = m \ll K$.
+\textbf{RC} (major--latent): one singleton atom on the largest
+nominal-flow path plus $m-1$ grouped atoms, the atom form of the
+production representation of Section~\ref{sec:grouped}. Throughout this
+section $m = 8$.
 
-\emph{Latent Frank--Wolfe} (L\,$+$\,FW). At iterate $z^k$ with link flows
-$v^k = \bar B' z^k + v_0$, the linearization step
-\begin{equation*}
-w^k \in \arg\min_{w \in \mathcal Z}\; \nabla_z f\bigl(\bar B' z^k + v_0\bigr)' w
-\end{equation*}
-decomposes by OD pair into the standard minimum-cost column selection --- the
-same linear minimization oracle as in classical path-based FW, now over major
-columns and family columns priced by $\bar b_{ik}' t(v^k)$. The update
-$z^{k+1} = (1 - \alpha_k) z^k + \alpha_k w^k$, with $\alpha_k$ from an exact
-BPR line search on $[0,1]$, stays in $\mathcal Z$ by convexity, and in
-original path-flow coordinates
-\begin{equation*}
-x^{k+1} = G z^{k+1} = (1 - \alpha_k)\, x^k + \alpha_k\, G w^k ,
-\end{equation*}
-so every iterate remains a convex combination of feasible path-flow
-assignments of the original problem.
+Two structural facts carry the section. First, feasibility is
+inherited, not enforced: every atom is a distribution
+\eqref{eq:atom-def}, so by
+Proposition~\ref{prop:convexity-preservation} any
+$s \in \prod_i \Delta_{d_i}$ decodes to $x \ge 0$ with $Ax = d$ exactly,
+and the atom hull is a convex subset of the original feasible set ---
+iterates of any feasible method on \eqref{eq:atom-simplex} are feasible
+path flows, with no multipliers, no penalties, and no dense inequality
+system. Second, the geometry is the one already in the paper: the
+anchor-eliminated capped simplex of Remark~\ref{rem:anchor-nonneg} in
+the coordinates of Section~\ref{sec:grouped} is \emph{identical} to the
+demand simplex \eqref{eq:atom-simplex} over the atom set
+$\{\text{anchor singleton}\} \cup \{\text{exported major and group
+columns}\}$, since every column contributes exactly its own mass to the
+OD total. The six-solver acceptance test below exploits this identity:
+one exported representation, several solvers, one optimum.
 
-\emph{Latent projected gradient} (L\,$+$\,PG). The same latent gradient
-$g^k = \bar B\, t(\bar B' z^k + v_0)$ instead drives a projected-gradient
-update on the product of OD simplices,
-\begin{equation*}
-z^{k+1} = \Pi_{\mathcal Z}\bigl( z^k - \gamma_k\, g^k \bigr),
-\end{equation*}
-where $\Pi_{\mathcal Z}$ is the Euclidean projection (computed independently
-per OD simplex in $O(K \log K)$), and $\gamma_k$ is a safeguarded
-Barzilai--Borwein trial step with Armijo backtracking on the projected
-direction. We deliberately do not call this method a reduced-gradient
-algorithm: there is no basis, no elimination, and no reduced costs --- only
-projection onto the same demand simplices that L\,$+$\,FW uses. Both solvers
-stop on the identical FW duality gap, computed from the same linear
-minimization oracle, so accuracy is matched by construction.
-Feasibility of every L\,$+$\,PG iterate follows from
-Proposition~\ref{prop:convexity-preservation}(a) exactly as for L\,$+$\,FW:
-$z^{k+1} \in \mathcal Z$ implies $x^{k+1} = G z^{k+1} \in \mathcal X$. The representation does not introduce a
-signed decoder or a nonconvex latent model: it replaces selected path columns
-by feasible convex combinations of path columns, preserving the convex
-feasible region, the convex Beckmann objective, and the classical
-convex-combination structure of FW iterations; cf.\
-\cite{bertsekas2009convex}. The same argument applies verbatim to
-origin-decomposed conditional gradient schemes, since the family columns are
-OD-local and hence origin-local: compression acts within each origin block and
-exact conservation is retained per block.
+The latent gradient is the atom cost,
+\begin{equation}
+\label{eq:atom-gradient}
+\frac{\partial F}{\partial s_{ik}}
+= \sum_{p \in G_{ik}} \pi_{ikp}\, t_p(v)
+= \bar b_{ik}^{\,\top}\, t(v),
+\end{equation}
+one sparse inner product per atom against the precomputed signature,
+exactly the online kernel of Section~\ref{sec:compressed-gradients}.
+Note the contrast with the reduced coordinates: \eqref{eq:atom-gradient}
+uses absolute path costs, not anchor differences; nothing in this
+section is a reduced-gradient method, and the anchor-eliminated
+representation R of Section~\ref{sec:elimination} remains a separate
+representation baseline, not an algorithm.
 
-\subsection{Exact Pricing and Promotion Preserve Convexity}
-\label{sec:promotion-convex}
+\subsection{Two Update Operators, One Certificate}
+\label{sec:two-operators}
 
-Suppose periodic exact pricing (a shortest-path computation at the current
-link times) identifies a path $p^\star$ absent from the representation, and
-$p^\star$ is promoted to the major set: its incidence vector is appended as a
-new identity column of $G$. Each promotion only enlarges the represented
-region, giving the nested sequence
-\begin{equation*}
-\mathcal X_{G^{(0)}} \subseteq \mathcal X_{G^{(1)}} \subseteq
-\mathcal X_{G^{(2)}} \subseteq \cdots \subseteq \mathcal X ,
-\end{equation*}
-with every intermediate problem convex by
-Proposition~\ref{prop:convexity-preservation}. Consequently the restricted
-optimal objectives are monotonically nonincreasing,
-$f^{(0)} \ge f^{(1)} \ge \cdots \ge f^\star$, and if sufficiently many actual
-path columns are eventually promoted, the compressed feasible region
-approaches the full path-flow feasible region. This is the standard
-column-generation guarantee, inherited without modification because promotion
-never leaves the convex-combination framework.
+\paragraph{Latent Frank--Wolfe.}
+The linear minimization oracle over \eqref{eq:atom-simplex} is
+separable and closed-form: for each OD pair, place the full demand on
+the atom of minimum cost \eqref{eq:atom-gradient}. This is verbatim the
+classical FW shortest-path oracle with ``path'' replaced by ``atom''; on
+class E the two coincide. Steps use the exact BPR line search. The FW
+duality gap
+\begin{equation}
+\label{eq:fw-gap}
+\mathrm{gap}(s)
+= \sum_i \Bigl( \textstyle\sum_k s_{ik}\, \bar t_{ik}
+  - d_i \min_k \bar t_{ik} \Bigr),
+\qquad \bar t_{ik} = \bar b_{ik}^{\,\top} t(v),
+\end{equation}
+certifies suboptimality over the atom hull.
 
-An important distinction from the signed SVD basis of
-Section~\ref{sec:compression} should be noted. A signed basis $x = x^0 + Qz$
-does not automatically have the convex-combination property, because entries
-of $Q$ may be negative; convexity of the feasible region is then maintained
-only by imposing the explicit linear system $x^0 + Qz \ge 0$, $A(x^0 + Qz) =
-d$, and the linear minimization oracle is no longer the standard OD simplex
-oracle. For the column-based FW extension the cleanest division of labor is
-therefore: use the (flow-weighted) SVD to \emph{discover} latent structure and
-candidate groupings, construct nonnegative convex route-family columns from
-that structure, and optimize the family flows over OD simplices. This is the
-complementarity already anticipated in Section~\ref{sec:grouped}, sharpened
-here into an exact statement.
+\paragraph{Latent Projected Gradient.}
+The second operator keeps the atoms, the gradient
+\eqref{eq:atom-gradient}, the objective, and even the stopping
+certificate \eqref{eq:fw-gap}, computable from the identical oracle ---
+and changes only the update: a Euclidean projection of a
+Barzilai--Borwein trial point onto each demand simplex, followed by
+Armijo backtracking along the projected direction. The per-OD
+projection is the standard $O(|\mathcal A_i| \log |\mathcal A_i|)$
+sorting algorithm. We call the method \emph{Latent Projected Gradient}
+(LPG); it is deliberately not called a reduced-gradient method, since it
+involves no basis, no elimination, and no reduced costs. A third
+operator, latent mirror descent under the entropy geometry
+(multiplicative per-OD updates with a step controller and the same
+certificate), is included as a robustness check.\footnote{Reference
+implementations: \texttt{fw\_origin\_compression.py} (latent FW, exact
+BPR line search, origin-block variant),
+\texttt{latent\_projected\_gradient.py} (LPG, about $90$ lines on top of
+the shared representation layer), and
+\texttt{run\_portability\_ext.py} (mirror descent and the extension
+cells), all in
+\texttt{compressed\_TAP\_repro\_package\_v3\_1\_LPG/repro/fw/src/}; the
+C++ projected-gradient kernel on the exported \texttt{group.csv}
+representation is \texttt{repro/cpp/tapkernel.cpp}, and the
+dependency-free CSR atom kernel is \texttt{repro/fw/cpp/fw\_atom\_kernel.cpp}.}
 
-\subsection{Recorded Computational Checks}
-\label{sec:fw-origin-evidence}
+Sharing the certificate \eqref{eq:fw-gap} across operators is what makes
+the comparison well posed: every solver is stopped by the same
+computable bound on the same restricted problem.
 
-The reformulation is exercised in a separate reproducibility
-package\footnote{\texttt{compressed\_TAP\_repro\_package\_v1\_1\_FW\_origin},
-directory \texttt{fw\_origin\_extension/}; the numbers below trace to
-\texttt{results/reference\_sioux/FW\_controlled.csv},
-\texttt{ORIGIN\_controlled.csv}, and \texttt{cpp\_kernel\_*.csv}. Wall-clock
-ratios are hardware-dependent (recorded single-thread runs); objective gaps,
-atom counts, storage reductions, and demand residuals are deterministic.}
-implementing FW and an origin-block conditional gradient scheme directly in
-the compressed coordinates \eqref{eq:compressed-fw}, with exact BPR line
-search, a common $10^{-5}$ relative-gap stopping rule, and exact demand
-feasibility at every iterate (recorded demand residuals below
-$1.3 \times 10^{-11}$). Table~\ref{tab:fw-origin-grouped} reports the
-controlled route-rich experiment: $20$ OD blocks whose admissible route pool
-grows with $K$ while the grouped representation holds $100$ atoms fixed.
+\subsection{Matched-Accuracy Protocol}
+\label{sec:portability-protocol}
 
-\begin{table}[htbp]
+The evaluation discipline of Section~\ref{sec:revised-protocol} applies
+with one addition. For each representation $\rho$, the restricted
+optimum $F^*_\rho$ is first computed to certificate $10^{-10}$. Each
+timed run of each solver on $\rho$ then records its
+\emph{time-to-target}: the wall time at which its objective first
+reaches $F^*_\rho\,(1 + 10^{-6})$. Speedups are within-solver ratios of
+times-to-target, $T(\mathrm{E}\text{-}X)/T(\mathrm{RC}\text{-}X)$, so
+each solver chases its own representation's optimum to the same relative
+accuracy; the representation error
+$(F^*_\rho - F^*_{\mathrm E})/F^*_{\mathrm E}$ is reported separately
+and is never folded into a speedup. Timing repetitions are one,
+single-thread; the deterministic columns (optima, gaps, iteration
+counts, feasibility residuals) are exact and reproduce the package's
+recorded values across machines.
+
+\subsection{Results}
+\label{sec:portability-results}
+
+\paragraph{The portability sweep.}
+On the controlled route ensemble at fixed latent dimension $m = 8$,
+route richness is swept over $K \in \{8, 32, 128, 512, 2048\}$, the last
+being the $K/m = 256$ regime of space-time column pools.
+Table~\ref{tab:portability} and Figure~\ref{fig:solver-portability}
+give the matched-accuracy speedups.
+
+\begin{table}[ht]
 \centering
-\caption{Controlled route-rich experiments: full path pool versus grouped
-convex route families (four families and one explicit major per OD block).
-Objective gaps are relative to the full-pool solution of the same method;
-speedups are median solve-time ratios of the recorded single-thread runs.}
-\label{tab:fw-origin-grouped}
-\begin{tabular}{lrrrrrr}
+\caption{Matched-accuracy speedup $T(\mathrm{E}\text{-}X)/
+T(\mathrm{RC}\text{-}X)$ at fixed latent dimension $m = 8$, and the RC
+representation gap, over route richness $K$. Controlled ensemble;
+$K \le 512$ with four OD pairs, $K = 2048$ with two (memory of the
+dense prototype). Prototype diagnostics under the protocol of
+Section~\ref{sec:portability-protocol}. $K \le 512$: the package's
+recorded single-thread run; $^\dagger$$K = 2048$: extension cell,
+single-thread run of 2026-07-19 on a second machine. Wall ratios are
+machine-dependent; the deterministic columns (gaps, optima, iteration
+counts) reproduce across machines exactly.}
+\label{tab:portability}
+{\small
+\begin{tabular}{lrrrrr}
 \toprule
-Method & $K$ & Full atoms & Grouped atoms & Obj.\ gap (\%) & Speedup & Storage \\
+$K$ & 8 & 32 & 128 & 512 & 2048 \\
 \midrule
-Frank--Wolfe & 8  & 160 & 100 & 0.190 & $1.18\times$ & $1.6\times$ \\
-Frank--Wolfe & 16 & 320 & 100 & 0.114 & $2.10\times$ & $3.2\times$ \\
-Frank--Wolfe & 32 & 640 & 100 & 0.045 & $5.17\times$ & $6.4\times$ \\
-Origin-block & 8  & 160 & 100 & 0.190 & $1.14\times$ & $1.6\times$ \\
-Origin-block & 16 & 320 & 100 & 0.114 & $1.73\times$ & $3.2\times$ \\
-Origin-block & 32 & 640 & 100 & 0.044 & $5.21\times$ & $6.4\times$ \\
+Projected gradient (LPG) & 1.02 & 1.17 & 3.00 & 7.70 & \textbf{9.36$^\dagger$} \\
+Frank--Wolfe             & 1.00 & 1.07 & 0.90 & 2.46 & \textbf{19.7$^\dagger$} \\
+\midrule
+RC representation gap (\%) & 0.00 & 1.19 & 1.78 & 1.85 & 1.25 \\
 \bottomrule
 \end{tabular}
+}
 \end{table}
 
-Two further recorded checks connect this section to the weighted-SVD analysis
-of the earlier sections. First, the flow-weighted construction transfers to
-standard FW as a feasible \emph{pool-screening} mechanism: weighted pivoted QR
-selects actual paths (no signed vector enters the simplex), after which
-ordinary restricted-pool FW is run. At $K = 16$ the screened pool attains a
-$0.015\%$ objective gap versus $0.308\%$ for unweighted screening (speedup
-$1.53\times$ versus full FW); at $K = 32$, $0.020\%$ versus $0.245\%$
-($1.12\times$). Second, a standalone C++17 kernel benchmark of the compressed
-forward/adjoint/linear-minimization operations on the packaged real-network
-path sets (Sioux Falls and Chicago Sketch at $K = 32$; $96$ full rows versus
-$15$ grouped rows) records single-thread kernel speedups of $3.10\times$ and
-$1.68\times$, respectively.
-
-These checks are deliberately modest in scope: they certify feasibility,
-exactness of conservation, and the predicted fixed-dimension behavior (the
-grouped variable count stays constant while the full pool grows with $K$, and
-the grouped model also requires fewer FW iterations in the richer cases),
-rather than making large-network solver claims, which belong to the protocols
-of Section~\ref{sec:experiments}.
-
-\subsection{Solver Portability of the Latent Representation}
-\label{sec:solver-portability}
-
-The convexity-preservation argument implies a testable prediction: the
-compression gain should be a property of the \emph{representation layer}, not
-of any particular solver. Because problem \eqref{eq:compressed-fw} is a smooth
-convex program over a product of simplices, any method for this constraint
-geometry applies. A dedicated study\footnote{%
-\texttt{compressed\_TAP\_repro\_package\_v3\_1\_LPG}, directory
-\texttt{repro/fw/}; numbers trace to
-\texttt{results/solver\_portability/solver\_portability.csv} and the recorded
-run of \texttt{repro/interface/integrated\_check.py}. Wall-clock ratios are
-hardware-dependent single-thread recordings; objective values, representation
-gaps, and residuals are deterministic.} tests this by comparing the two
-solvers of Section~\ref{sec:fw-interpretation} --- L\,$+$\,FW and
-L\,$+$\,PG --- which differ in exactly one component, the update operator,
-while sharing the atom set, the latent gradient, the OD demand simplices, the
-objective, and the duality-gap stopping certificate. The protocol enforces
-matched accuracy per representation: the restricted optimum $f^*_\rho$ of each
-representation is first computed to duality gap $10^{-10}$, each timed run
-stops at first crossing of $f^*_\rho(1 + 10^{-6})$, speedups are
-\emph{within-solver} ratios (explicit-pool time over compressed time for the
-same method), and the representation error $(f^*_\rho - f^*_E)/f^*_E$ is
-reported separately, never folded into a speedup.
-
-\begin{table}[htbp]
+\begin{figure}[ht]
 \centering
-\caption{Solver portability, controlled sweep ($4$ OD pairs, $8$ latent atoms
-per OD plus one explicit major in RC, growing route pool $K$).
-Matched-accuracy within-solver speedups of the compressed representation (RC)
-over the explicit pool (E), and representation gaps of RC and of pure latent
-C (no explicit major). Recorded single-thread runs.}
-\label{tab:solver-portability}
-\begin{tabular}{rrrrr}
-\toprule
-$K$ & L\,$+$\,PG speedup & L\,$+$\,FW speedup & RC gap (\%) & C gap (\%) \\
-\midrule
-8   & $1.02\times$ & $1.00\times$ & 0.00 & 0.00 \\
-32  & $1.17\times$ & $1.07\times$ & 1.19 & 2.89 \\
-128 & $3.00\times$ & $0.90\times$ & 1.78 & 6.26 \\
-512 & $7.70\times$ & $2.46\times$ & 1.85 & 6.23 \\
-\bottomrule
-\end{tabular}
-\end{table}
+\includegraphics[width=0.66\textwidth]{fig/fig_solver_portability.pdf}
+\caption{Matched-accuracy speedup of the major--latent representation
+over the explicit path pool, for the projected-gradient and
+Frank--Wolfe operators, over route richness $K$ at $m = 8$. The gain
+grows with $K/m$ under both operators.}
+\label{fig:solver-portability}
+\end{figure}
 
-Three observations from Table~\ref{tab:solver-portability} and the
-accompanying real-network runs deserve emphasis. First, the projected-gradient
-speedup grows monotonically with the pool-to-atom ratio, reaching
-$7.70\times$ at $K = 512$: PG's per-iteration cost (link loading plus an
-$O(K \log K)$ projection) scales with the representation while its iteration
-count does not, which is exactly the dimension-dependence the portability
-argument requires. Compression benefits projection-based methods at least as
-much as linear-oracle methods. Second, the FW wall-time caveat is real: in
-this Python implementation FW's time is iteration-count bound (the $O(1/k)$
-tail chasing a $10^{-6}$ target) with size-independent per-iteration overhead,
-so its wall-time speedup stays near one until $K = 512$; FW's per-iteration
-dimension gains are established separately at kernel level
-(Section~\ref{sec:fw-origin-evidence}). Wall-time and kernel evidence must not
-be conflated. Third, the support mechanism of the earlier sections reappears
-at its most dramatic on the congested Chicago Sketch instance ($K = 32$,
-doubled demand): pure latent C --- convex atoms with nominal shares and no
-explicit major --- fails by $149.8\%$, because nominal-share convex
-combinations cannot concentrate mass on the dominant path; a single explicit
-major per OD (RC) repairs this to $0.53\%$, with within-solver E/RC speedups
-of $95\times$ (L\,$+$\,FW) and $4.3\times$ (L\,$+$\,PG) on that instance. On the
-anchor-supported Sioux Falls instance all representations are exact and both
-solvers converge essentially immediately.
+Two curves, two lessons. The projected-gradient speedup grows with
+$K/m$ --- from $1.02$ at $K = 8$ to $7.70$ at $K = 512$ in the recorded sweep, with the $K = 2048$ extension cell at $9.4\times$ --- because LPG's per-iteration cost (link
+loading plus the $O(K \log K)$ projection) scales with the
+representation while its iteration count does not; the prediction that
+compression benefits projection-based methods at least as much as
+linear-oracle methods is confirmed. The Frank--Wolfe curve carries an
+implementation caveat that belongs in print: in the Python prototype,
+FW's wall time is bound by its $O(1/k)$ iteration count with
+size-independent per-iteration overhead, so the dimension gain surfaces
+only when the per-iteration cost finally dominates, at $K = 2048$
+($19.7\times$ in the extension cell). FW's per-iteration dimension gains at moderate
+$K$ are established separately at kernel level: the dependency-free C++
+CSR atom kernel runs the grouped signatures $3.2\times$ (Sioux Falls)
+and $1.8\times$ (Chicago Sketch) faster than the full pool at $K = 32$.
+Wall-time and kernel evidence are labeled at the source and never
+conflated.
 
-Finally, an integrated five-solver acceptance check runs one exported
-problem-layer instance through SLSQP on the anchor-eliminated grouped decoder,
-the C++ projected-gradient kernel, FW on the interface atoms, FW on the full
-path pool, and L\,$+$\,PG on the same interface atoms, and requires agreement of
-their optima. On the spread-demand Chicago instance, L\,$+$\,PG matches the SLSQP
-reference to $3.7 \times 10^{-14}$ relative --- on the identical atoms where
-vanilla FW's sublinear tail stops at $9.8 \times 10^{-5}$. The verified
-equivalence chain thus reads: ALM $=$ simplex projected gradient $=$
-reduced gradient $=$ L\,$+$\,FW $=$ L\,$+$\,PG, all through the standard problem-layer
-interface, certified by a common duality gap. This is the operational content
-of Proposition~\ref{prop:convexity-preservation}: one convex representation,
-many interchangeable solvers.
+\paragraph{FW-native results on the real subproblems.}
+Latent FW itself, run as the primary solver on the route-rich controlled
+ensemble, reproduces the break-even structure of
+Section~\ref{sec:grid-two-factor}: grouped atoms accelerate FW by
+$1.06 \to 1.45 \to 4.64$ over $K = 8/16/32$ at objective gaps of
+$0.19 \to 0.11 \to 0.045\%$, and the origin-block conditional-gradient
+variant by $1.20 \to 1.57 \to 6.74$ at the same gaps. The signed SVD
+basis is not a valid FW atom --- it violates path nonnegativity and
+changes the oracle --- and its correct FW role is feasible path
+\emph{screening}: pivoted-QR selection of a restricted path pool, where
+flow weighting again dominates its unweighted counterpart
+($0.015\%$ vs.\ $0.31\%$ at $K = 16$; $0.020\%$ vs.\ $0.245\%$ at
+$K = 32$), the accuracy-per-dimension mechanism of
+Section~\ref{sec:grid-two-factor} surviving inside a third algorithmic
+context.
+
+\paragraph{The support mechanism, third appearance.}
+The regime structure of Section~\ref{sec:major-latent} reappears
+unprompted. On the anchor-supported Sioux Falls subproblems every
+representation and every solver is exact with near-unit speedups ---
+there is nothing to compress away from a one-path support. On the
+congested Chicago subproblem the pure-latent class C fails by
+$149.8\%$: convex combinations with nominal shares cannot concentrate
+mass on the dominant path. One singleton atom per OD (class RC) repairs
+this to $0.53\%$, with within-solver E/RC speedups of
+$95\times$ (FW) and $4.3\times$ (LPG) on that instance in the recorded
+run.
+The share-ablation ordering, the oracle bound, and now the atom
+geometry give the same verdict three independent ways: the explicit
+major is the indispensable degree of freedom, and the latent block is
+valuable only on top of it.
+
+\paragraph{Cross-solver, cross-language equivalence.}
+The package acceptance test exports one instance through the standard
+interface and solves the identical representation six ways: SLSQP on
+the reduced coordinates, the C++ Barzilai--Borwein projected gradient
+on the capped simplex, Python LPG on the atoms, latent FW on the atoms,
+latent mirror descent on the atoms, and FW on the full pool against the
+R0 reference. On the sparse instances all methods agree to $10^{-13}$
+or better; on the spread-support instance LPG reaches
+$4 \times 10^{-16}$ of the C++/SLSQP optimum in $81$ iterations, and
+mirror descent $3.3 \times 10^{-13}$ in $588$, while vanilla FW's
+sublinear tail is still $7 \times 10^{-5}$ away after $40{,}000$
+iterations --- acceptance is gap-certified, so this is recorded as
+agreement within FW's certificate, not as failure. On the controlled
+ensemble, mirror descent matches LPG to $3 \times 10^{-15}$ at both
+$K = 32$ and $K = 512$. The verified equivalence chain of
+Section~\ref{sec:revised-protocol} therefore closes as
+\begin{equation*}
+\text{ALM} \;\approx\; \text{simplex-PG} \;\approx\;
+\text{reduced gradient} \;\approx\; \text{latent FW}
+\;\approx\; \text{LPG} \;\approx\; \text{latent MD},
+\end{equation*}
+in two languages, in both support regimes, through one interchange
+format.
 
 \subsection{Beyond Traffic: Major--Latent Prototypes for General Column Pools}
 \label{sec:beyond-traffic}
@@ -373,16 +416,33 @@ Unit commitment & 162 & 18 & 24 & 5.60 & 0.38 \\
 \end{table}
 
 The pattern of Table~\ref{tab:beyond-traffic} reproduces, in miniature, the
-support mechanism of Section~\ref{sec:solver-portability}: pure latent
+support mechanism above: pure latent
 compression (C) incurs a visible objective error because frozen convex shares
 cannot concentrate weight on the dominant columns, while retaining a few
 explicit major columns (RC) recovers the optimum to $0.00\%$ and $0.38\%$ at
 $5\times$ and $7\times$ column reduction, respectively. Feasibility residuals
 are at machine precision in all cases, as the convexity argument requires.
-These prototypes support the broader claim of the concluding section: the
-major--latent construction is a representation-layer device for column-pool
-convex programs in general, with traffic assignment as its most developed
-instance.
+
+\subsection{What the Portability Result Licenses}
+\label{sec:portability-conclusions}
+
+The section's contribution is a boundary statement. The latent
+route-family representation --- explicit majors plus nonnegative grouped
+atoms --- can be dropped into any first-order traffic-assignment method
+whose feasible geometry is the product of OD demand simplices:
+Frank--Wolfe and its origin-block variants, projected gradient, and
+entropic mirror methods, with the atom oracle, the simplex projection,
+and the multiplicative update as the respective one-line substitutions.
+The gain is governed by $K/m$ and by support coverage, not by the choice
+of operator; the FW-specific machinery of the literature is not what
+carries it. Signed spectral bases participate through screening, not as
+atoms. And because the interchange format stores atoms as ordered arc
+sequences, the $K/m \sim 10^2$ regime where the speedup is largest is
+precisely the regime of space-time column pools, where each arc is a
+(link, departure-time) pair and nothing in the geometry, the operators,
+or the certificate changes. That extension is designed into the
+interface and is deliberately left as the next piece of work rather
+than claimed here.
 
 \subsection{Summary Statement}
 \label{sec:fw-origin-summary}
