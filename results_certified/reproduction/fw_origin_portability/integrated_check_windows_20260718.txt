@@ -1,0 +1,4 @@
+[sf_k32] SLSQP 4.7204264534e+00 | cpp-BB rel 1.9e-16 | FW-atoms rel 0.0e+00 (rgap 0.0e+00) | LPG-atoms rel 1.9e-16 (rgap 0.0e+00) | FW-full vs R0 rel 2.6e-11 (rgap 0.0e+00) | OK
+[cs_k64] SLSQP 6.9819881881e+00 | cpp-BB rel 8.0e-15 | FW-atoms rel 8.1e-15 (rgap 4.4e-11) | LPG-atoms rel 7.6e-15 (rgap 6.2e-11) | FW-full vs R0 rel 2.3e-09 (rgap 7.2e-10) | OK
+[cs_k32_spread] SLSQP 1.7336053283e+01 | cpp-BB rel 3.7e-14 | FW-atoms rel 9.8e-05 (rgap 9.4e-05) | LPG-atoms rel 3.7e-14 (rgap 6.9e-09) | FW-full vs R0 rel 1.8e-04 (rgap 2.0e-04) | OK
+INTEGRATED CHECK PASSED

@@ -1,0 +1,324 @@
+%% SECTION 7: convexity-preserving column-based extension (FW / origin methods).
+%% Added 2026-07-18. All reported numbers trace to
+%% compressed_TAP_repro_package_v1_1_FW_origin/fw_origin_extension/results/
+%% (reference_sioux/FW_controlled.csv, reference_sioux/ORIGIN_controlled.csv,
+%%  reference_sioux/cpp_kernel_sioux.csv, reference_chicago/cpp_kernel_chicago.csv).
+
+\section{A Convexity-Preserving Column-Based Extension: Frank--Wolfe and Origin-Decomposed Methods}
+\label{sec:fw_origin}
+
+The grouped representation of Section~\ref{sec:grouped} was introduced as a
+constraint-compatible refinement of the compressed formulation solved by the AL
+method. In this section we show that the same construction carries a stronger
+and broader interpretation: it is a \emph{convexity-preserving reformulation}
+of the path-based problem, not merely a heuristic grouping device, and it is
+therefore directly compatible with classical feasible-direction methods ---
+Frank--Wolfe (FW) and origin-decomposed conditional gradient schemes --- whose
+theory rests on convex combinations of feasible assignments. The central
+observation is that each latent route family is a convex combination of
+feasible paths, the link-flow mapping remains linear, and the Beckmann
+objective remains convex; consequently every statement of the classical convex
+theory survives compression unchanged.
+
+\subsection{Latent Route Families as Convex Combinations}
+\label{sec:latent-convex}
+
+Consider OD pair $i$ and let $b_p \in \Re^m$ denote the $p$th row of the
+path-link incidence matrix $B$, written as a column vector. As in
+Section~\ref{sec:grouped}, partition the minor paths of OD pair $i$ into
+groups $G_{ik}$, $k = 1, \dots, r_i$, with fixed shares satisfying
+\eqref{eq:group-shares}:
+$\pi_{ikp} \ge 0$ and $\sum_{p \in G_{ik}} \pi_{ikp} = 1$.
+The aggregate column of family $(i,k)$, cf.\ \eqref{eq:aggregate-column}, is
+\begin{equation}
+\label{eq:family-hull}
+\bar b_{ik} = \sum_{p \in G_{ik}} \pi_{ikp}\, b_p
+\;\in\;
+\operatorname{conv}\bigl\{\, b_p : p \in G_{ik} \,\bigr\}.
+\end{equation}
+A latent route family is therefore not necessarily one physical path; it is a
+feasible convex combination of physical paths of the same OD pair. This is the
+mathematically precise meaning of the latent route family.
+
+Let $y_i \ge 0$ collect the flows on the explicit major paths of OD pair $i$
+and $s_{ik} \ge 0$ the flow assigned to family $G_{ik}$, subject to
+\begin{equation}
+\label{eq:z-simplex}
+\sum_{p \in \mathcal M_i} y_{ip} + \sum_{k=1}^{r_i} s_{ik} = d_i ,
+\end{equation}
+where $\mathcal M_i$ is the major-path set of OD pair $i$. The implied
+minor-path flows are $x_p = \pi_{ikp}\, s_{ik}$ for $p \in G_{ik}$, cf.\
+\eqref{eq:group-flow}. Stacking $z_i = (y_i, s_i)$ and $z = (z_1, \dots,
+z_\ell)$, the reconstruction of the full path-flow vector is linear,
+\begin{equation}
+\label{eq:G-reconstruction}
+x = G z ,
+\end{equation}
+where $G$ contains an identity column for each explicit major path and a
+nonnegative convex-combination column (the shares $\pi_{ikp}$) for each latent
+route family. The following proposition records the properties that make this
+representation exact convex programming rather than approximation heuristics.
+
+\begin{proposition}[Convexity preservation of latent path-space compression]
+\label{prop:convexity-preservation}
+Let each compressed column of OD pair $i$ be either a feasible path-incidence
+vector (a major path) or a convex combination \eqref{eq:family-hull} of
+feasible path-incidence vectors of the same OD pair. Then:
+\begin{itemize}
+\item[(a)] every compressed solution $z \ge 0$ satisfying
+\eqref{eq:z-simplex} reconstructs, via \eqref{eq:G-reconstruction}, a
+nonnegative path-flow vector satisfying exact OD conservation, so the
+represented path-flow set $\mathcal X_G = \{\, Gz : z \in \mathcal Z \,\}$,
+with $\mathcal Z = \prod_i \{ z_i \ge 0 : \mathbf 1' z_i = d_i \}$, is a
+convex subset of the original feasible path-flow set $\mathcal X$ of problem
+\eqref{eq:original_ta};
+\item[(b)] if each link travel-time function is nondecreasing, the compressed
+problem
+\begin{equation}
+\label{eq:compressed-fw}
+\min_{z \in \mathcal Z} \; f\bigl(\bar B' z + v_0\bigr),
+\qquad \bar B = G' B ,
+\end{equation}
+is a convex program over a product of OD simplices.
+\end{itemize}
+\end{proposition}
+
+\begin{proof}
+(a) Nonnegativity: $z \ge 0$ and $G \ge 0$ entrywise imply $x = Gz \ge 0$; in
+particular $x_p = \pi_{ikp} s_{ik} \ge 0$ for every minor path. Conservation:
+for OD pair $i$,
+$\sum_{p \in G_{ik}} x_p = s_{ik} \sum_{p \in G_{ik}} \pi_{ikp} = s_{ik}$,
+so the total path flow of OD pair $i$ equals
+$\sum_{p} y_{ip} + \sum_k s_{ik} = d_i$ by \eqref{eq:z-simplex}. Hence $Gz \in
+\mathcal X$. Each $\mathcal Z_i$ is a simplex, so $\mathcal Z$ is convex, and
+$\mathcal X_G$ is the linear image of a convex set, hence convex.
+(b) The link-flow map $v = B'x + v_0 = B'Gz + v_0 = \bar B' z + v_0$ is affine
+in $z$, and $f$ is convex when the link travel-time functions are
+nondecreasing; therefore $z \mapsto f(\bar B' z + v_0)$ is convex, and the
+constraint set is a product of simplices.
+\end{proof}
+
+The method thus solves the original convex assignment problem over a
+compressed convex \emph{inner approximation} $\mathcal X_G \subseteq \mathcal
+X$ of the path-flow feasible region.
+
+\subsection{Frank--Wolfe Retains Its Convex-Combination Interpretation}
+\label{sec:fw-interpretation}
+
+Because the feasible set of \eqref{eq:compressed-fw} is a product of OD
+simplices, the FW linearization step
+\begin{equation*}
+w^k \in \arg\min_{w \in \mathcal Z}\; \nabla_z f\bigl(\bar B' z^k + v_0\bigr)' w
+\end{equation*}
+decomposes by OD pair into the standard minimum-cost column selection --- the
+same linear minimization oracle as in classical path-based FW, now over major
+columns and family columns priced by $\bar b_{ik}' t(v^k)$. The update
+$z^{k+1} = (1 - \alpha_k) z^k + \alpha_k w^k$ with $\alpha_k \in [0,1]$ stays
+in $\mathcal Z$ by convexity, and in original path-flow coordinates
+\begin{equation*}
+x^{k+1} = G z^{k+1} = (1 - \alpha_k)\, x^k + \alpha_k\, G w^k ,
+\end{equation*}
+so every iterate remains a convex combination of feasible path-flow
+assignments of the original problem. The representation does not introduce a
+signed decoder or a nonconvex latent model: it replaces selected path columns
+by feasible convex combinations of path columns, preserving the convex
+feasible region, the convex Beckmann objective, and the classical
+convex-combination structure of FW iterations; cf.\
+\cite{bertsekas2009convex}. The same argument applies verbatim to
+origin-decomposed conditional gradient schemes, since the family columns are
+OD-local and hence origin-local: compression acts within each origin block and
+exact conservation is retained per block.
+
+\subsection{Exact Pricing and Promotion Preserve Convexity}
+\label{sec:promotion-convex}
+
+Suppose periodic exact pricing (a shortest-path computation at the current
+link times) identifies a path $p^\star$ absent from the representation, and
+$p^\star$ is promoted to the major set: its incidence vector is appended as a
+new identity column of $G$. Each promotion only enlarges the represented
+region, giving the nested sequence
+\begin{equation*}
+\mathcal X_{G^{(0)}} \subseteq \mathcal X_{G^{(1)}} \subseteq
+\mathcal X_{G^{(2)}} \subseteq \cdots \subseteq \mathcal X ,
+\end{equation*}
+with every intermediate problem convex by
+Proposition~\ref{prop:convexity-preservation}. Consequently the restricted
+optimal objectives are monotonically nonincreasing,
+$f^{(0)} \ge f^{(1)} \ge \cdots \ge f^\star$, and if sufficiently many actual
+path columns are eventually promoted, the compressed feasible region
+approaches the full path-flow feasible region. This is the standard
+column-generation guarantee, inherited without modification because promotion
+never leaves the convex-combination framework.
+
+An important distinction from the signed SVD basis of
+Section~\ref{sec:compression} should be noted. A signed basis $x = x^0 + Qz$
+does not automatically have the convex-combination property, because entries
+of $Q$ may be negative; convexity of the feasible region is then maintained
+only by imposing the explicit linear system $x^0 + Qz \ge 0$, $A(x^0 + Qz) =
+d$, and the linear minimization oracle is no longer the standard OD simplex
+oracle. For the column-based FW extension the cleanest division of labor is
+therefore: use the (flow-weighted) SVD to \emph{discover} latent structure and
+candidate groupings, construct nonnegative convex route-family columns from
+that structure, and optimize the family flows over OD simplices. This is the
+complementarity already anticipated in Section~\ref{sec:grouped}, sharpened
+here into an exact statement.
+
+\subsection{Recorded Computational Checks}
+\label{sec:fw-origin-evidence}
+
+The reformulation is exercised in a separate reproducibility
+package\footnote{\texttt{compressed\_TAP\_repro\_package\_v1\_1\_FW\_origin},
+directory \texttt{fw\_origin\_extension/}; the numbers below trace to
+\texttt{results/reference\_sioux/FW\_controlled.csv},
+\texttt{ORIGIN\_controlled.csv}, and \texttt{cpp\_kernel\_*.csv}. Wall-clock
+ratios are hardware-dependent (recorded single-thread runs); objective gaps,
+atom counts, storage reductions, and demand residuals are deterministic.}
+implementing FW and an origin-block conditional gradient scheme directly in
+the compressed coordinates \eqref{eq:compressed-fw}, with exact BPR line
+search, a common $10^{-5}$ relative-gap stopping rule, and exact demand
+feasibility at every iterate (recorded demand residuals below
+$1.3 \times 10^{-11}$). Table~\ref{tab:fw-origin-grouped} reports the
+controlled route-rich experiment: $20$ OD blocks whose admissible route pool
+grows with $K$ while the grouped representation holds $100$ atoms fixed.
+
+\begin{table}[htbp]
+\centering
+\caption{Controlled route-rich experiments: full path pool versus grouped
+convex route families (four families and one explicit major per OD block).
+Objective gaps are relative to the full-pool solution of the same method;
+speedups are median solve-time ratios of the recorded single-thread runs.}
+\label{tab:fw-origin-grouped}
+\begin{tabular}{lrrrrrr}
+\toprule
+Method & $K$ & Full atoms & Grouped atoms & Obj.\ gap (\%) & Speedup & Storage \\
+\midrule
+Frank--Wolfe & 8  & 160 & 100 & 0.190 & $1.18\times$ & $1.6\times$ \\
+Frank--Wolfe & 16 & 320 & 100 & 0.114 & $2.10\times$ & $3.2\times$ \\
+Frank--Wolfe & 32 & 640 & 100 & 0.045 & $5.17\times$ & $6.4\times$ \\
+Origin-block & 8  & 160 & 100 & 0.190 & $1.14\times$ & $1.6\times$ \\
+Origin-block & 16 & 320 & 100 & 0.114 & $1.73\times$ & $3.2\times$ \\
+Origin-block & 32 & 640 & 100 & 0.044 & $5.21\times$ & $6.4\times$ \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+Two further recorded checks connect this section to the weighted-SVD analysis
+of the earlier sections. First, the flow-weighted construction transfers to
+standard FW as a feasible \emph{pool-screening} mechanism: weighted pivoted QR
+selects actual paths (no signed vector enters the simplex), after which
+ordinary restricted-pool FW is run. At $K = 16$ the screened pool attains a
+$0.015\%$ objective gap versus $0.308\%$ for unweighted screening (speedup
+$1.53\times$ versus full FW); at $K = 32$, $0.020\%$ versus $0.245\%$
+($1.12\times$). Second, a standalone C++17 kernel benchmark of the compressed
+forward/adjoint/linear-minimization operations on the packaged real-network
+path sets (Sioux Falls and Chicago Sketch at $K = 32$; $96$ full rows versus
+$15$ grouped rows) records single-thread kernel speedups of $3.10\times$ and
+$1.68\times$, respectively.
+
+These checks are deliberately modest in scope: they certify feasibility,
+exactness of conservation, and the predicted fixed-dimension behavior (the
+grouped variable count stays constant while the full pool grows with $K$, and
+the grouped model also requires fewer FW iterations in the richer cases),
+rather than making large-network solver claims, which belong to the protocols
+of Section~\ref{sec:experiments}.
+
+\subsection{Solver Portability of the Latent Representation}
+\label{sec:solver-portability}
+
+The convexity-preservation argument implies a testable prediction: the
+compression gain should be a property of the \emph{representation layer}, not
+of any particular solver. Because problem \eqref{eq:compressed-fw} is a smooth
+convex program over a product of simplices, any method for this constraint
+geometry applies. A dedicated study\footnote{%
+\texttt{compressed\_TAP\_repro\_package\_v3\_1\_LPG}, directory
+\texttt{repro/fw/}; numbers trace to
+\texttt{results/solver\_portability/solver\_portability.csv} and the recorded
+run of \texttt{repro/interface/integrated\_check.py}. Wall-clock ratios are
+hardware-dependent single-thread recordings; objective values, representation
+gaps, and residuals are deterministic.} tests this by adding exactly one
+component --- a second update operator --- and changing nothing else: a
+\emph{latent projected gradient} (LPG) method that shares with latent FW the
+atom set, the latent gradient $\bar B\, t(\bar B' z + v_0)$, the OD demand
+simplices, the objective, and even the stopping certificate (the identical FW
+duality gap, computed from the same linear minimization oracle). The update is
+a Euclidean simplex projection with a safeguarded Barzilai--Borwein trial step
+and Armijo backtracking on the projected direction. The protocol enforces
+matched accuracy per representation: the restricted optimum $f^*_\rho$ of each
+representation is first computed to duality gap $10^{-10}$, each timed run
+stops at first crossing of $f^*_\rho(1 + 10^{-6})$, speedups are
+\emph{within-solver} ratios (explicit-pool time over compressed time for the
+same method), and the representation error $(f^*_\rho - f^*_E)/f^*_E$ is
+reported separately, never folded into a speedup.
+
+\begin{table}[htbp]
+\centering
+\caption{Solver portability, controlled sweep ($4$ OD pairs, $8$ latent atoms
+per OD plus one explicit major in RC, growing route pool $K$).
+Matched-accuracy within-solver speedups of the compressed representation (RC)
+over the explicit pool (E), and representation gaps of RC and of pure latent
+C (no explicit major). Recorded single-thread runs.}
+\label{tab:solver-portability}
+\begin{tabular}{rrrrr}
+\toprule
+$K$ & PG speedup & FW speedup & RC gap (\%) & C gap (\%) \\
+\midrule
+8   & $1.02\times$ & $1.00\times$ & 0.00 & 0.00 \\
+32  & $1.17\times$ & $1.07\times$ & 1.19 & 2.89 \\
+128 & $3.00\times$ & $0.90\times$ & 1.78 & 6.26 \\
+512 & $7.70\times$ & $2.46\times$ & 1.85 & 6.23 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+Three observations from Table~\ref{tab:solver-portability} and the
+accompanying real-network runs deserve emphasis. First, the projected-gradient
+speedup grows monotonically with the pool-to-atom ratio, reaching
+$7.70\times$ at $K = 512$: PG's per-iteration cost (link loading plus an
+$O(K \log K)$ projection) scales with the representation while its iteration
+count does not, which is exactly the dimension-dependence the portability
+argument requires. Compression benefits projection-based methods at least as
+much as linear-oracle methods. Second, the FW wall-time caveat is real: in
+this Python implementation FW's time is iteration-count bound (the $O(1/k)$
+tail chasing a $10^{-6}$ target) with size-independent per-iteration overhead,
+so its wall-time speedup stays near one until $K = 512$; FW's per-iteration
+dimension gains are established separately at kernel level
+(Section~\ref{sec:fw-origin-evidence}). Wall-time and kernel evidence must not
+be conflated. Third, the support mechanism of the earlier sections reappears
+at its most dramatic on the congested Chicago Sketch instance ($K = 32$,
+doubled demand): pure latent C --- convex atoms with nominal shares and no
+explicit major --- fails by $149.8\%$, because nominal-share convex
+combinations cannot concentrate mass on the dominant path; a single explicit
+major per OD (RC) repairs this to $0.53\%$, with within-solver E/RC speedups
+of $95\times$ (FW) and $4.3\times$ (PG) on that instance. On the
+anchor-supported Sioux Falls instance all representations are exact and both
+solvers converge essentially immediately.
+
+Finally, an integrated five-solver acceptance check runs one exported
+problem-layer instance through SLSQP on the anchor-eliminated grouped decoder,
+the C++ projected-gradient kernel, FW on the interface atoms, FW on the full
+path pool, and LPG on the same interface atoms, and requires agreement of
+their optima. On the spread-demand Chicago instance, LPG matches the SLSQP
+reference to $3.7 \times 10^{-14}$ relative --- on the identical atoms where
+vanilla FW's sublinear tail stops at $9.8 \times 10^{-5}$. The verified
+equivalence chain thus reads: ALM $=$ simplex projected gradient $=$
+reduced gradient $=$ FW $=$ LPG, all through the standard problem-layer
+interface, certified by a common duality gap. This is the operational content
+of Proposition~\ref{prop:convexity-preservation}: one convex representation,
+many interchangeable solvers.
+
+\subsection{Summary Statement}
+\label{sec:fw-origin-summary}
+
+The latent route-family representation is convexity preserving. Each latent
+column is constructed as a nonnegative convex combination of feasible path
+columns within the same OD pair. The compressed decision variables remain on
+the OD demand simplex, and their linear reconstruction produces nonnegative
+path flows satisfying exact OD conservation. Consequently, the represented
+feasible set is a convex subset of the original path-flow polytope. Because
+link flows are linear in the compressed variables and the Beckmann potential
+is convex under nondecreasing link costs, the resulting compressed assignment
+remains a convex program. Standard Frank--Wolfe updates retain their classical
+interpretation as convex combinations of feasible assignments. This is a
+central methodological property of the framework, not an implementation
+detail: it is what allows the compression to be embedded in FW, origin-based,
+and column-generation solvers without altering their convergence theory.
