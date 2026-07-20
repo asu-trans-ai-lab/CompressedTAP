@@ -622,6 +622,7 @@ class ALM:
         beta_penalty=10.0,
         tolerance=0.1,
         random_state=None,
+        centered=False,
     ):
         self.B1 = decomp["B1"]
         # Ensure B2 exists; default to empty (n_minor x m_links) sparse matrix when missing
@@ -716,6 +717,32 @@ class ALM:
         path_to_od_all = od_info["path_to_od"]
         self.od_of_major = multi_remap[path_to_od_all[decomp["major_indices"]]]
         self.od_of_minor = multi_remap[path_to_od_all[decomp["minor_indices"]]]
+
+        # Affine-centered SVD representation (Yuchao): w = w0 + U_r z.
+        # With centered=False, w0/Dw0/A2w0 are zero vectors and every
+        # formula below reduces to the original uncentered code path.
+        n_minor_eff = len(self.w_ref) if self.r > 0 else 0
+        self.centered = bool(centered) and self.r > 0
+        if self.centered:
+            w0 = np.asarray(self.w_ref, dtype=np.float64).copy()
+            od_minor_sum = np.asarray(self.A2 @ w0).flatten()
+            viol = od_minor_sum > self.d_multi + 1e-12
+            if np.any(viol):
+                ratio = np.ones(self.k)
+                ratio[viol] = self.d_multi[viol] / od_minor_sum[viol]
+                w0 = w0 * ratio[self.od_of_minor]
+                print("  [centered] proportional w0 reduction on "
+                      f"{int(viol.sum())} ODs (A2 w0 <= d safeguard)")
+            self.w0 = w0
+            print("  [centered] affine SVD representation: w = w0 + U_r z")
+        else:
+            self.w0 = np.zeros(n_minor_eff, dtype=np.float64)
+        if self.r > 0:
+            self.Dw0 = np.asarray(self.B2.T @ self.w0).flatten()
+            self.A2w0 = np.asarray(self.A2 @ self.w0).flatten()
+        else:
+            self.Dw0 = None
+            self.A2w0 = None
 
         self.s = decomp["s"]
         self.m = self.B1.shape[1]
@@ -916,7 +943,7 @@ class ALM:
         """
         # Handle OD flow computation
         if self.r > 0:
-            u = self.U_r @ z
+            u = self.w0 + self.U_r @ z
             od_flow = self.A1 @ y + self.A2 @ u
         else:
             u = None
@@ -938,7 +965,7 @@ class ALM:
         """Get detailed OD violation information for all OD pairs"""
         # Handle OD flow computation
         if self.r > 0:
-            u = self.U_r @ z
+            u = self.w0 + self.U_r @ z
             od_flow = self.A1 @ y + self.A2 @ u
         else:
             od_flow = self.A1 @ y
@@ -1067,7 +1094,7 @@ class ALM:
 
         if self.r > 0:
             # minor path contribution computed via chain multiplications
-            u = self.U_r @ z
+            u = self.w0 + self.U_r @ z
             v += self.B2.T.dot(u)
 
         # BPR objective (v includes constant v0 contribution)
@@ -1139,15 +1166,15 @@ class ALM:
             v = self.B1.T @ y
 
         if self.r > 0:
-            u = self.U_r @ z
-            v += self.D @ z
+            u = self.w0 + self.U_r @ z
+            v += self.D @ z + self.Dw0
 
         # BPR objective
         f_bpr = bpr_objective(v, self.capacity, self.t_0, self.alpha, self.beta)
 
         # OD conservation using direct M multiplication: A1*y + M*z = d_multi
         if self.r > 0:
-            od_flow = self.A1 @ y + self.M @ z
+            od_flow = self.A1 @ y + self.M @ z + self.A2w0
         else:
             od_flow = self.A1 @ y
         od_error = od_flow - self.d_multi
@@ -1206,15 +1233,15 @@ class ALM:
             v = self.B1.T @ y
 
         if self.r > 0:
-            u = self.U_r @ z
-            v += self.D @ z
+            u = self.w0 + self.U_r @ z
+            v += self.D @ z + self.Dw0
 
         # BPR objective
         f_bpr = bpr_objective(v, self.capacity, self.t_0, self.alpha, self.beta)
 
         # OD conservation using direct M multiplication: A1*y + M*z = d_multi
         if self.r > 0:
-            od_flow = self.A1 @ y + self.M @ z
+            od_flow = self.A1 @ y + self.M @ z + self.A2w0
         else:
             od_flow = self.A1 @ y
         od_error = od_flow - self.d_multi
@@ -1320,16 +1347,16 @@ class ALM:
             # Factored form: V_r @ (sigma * z) instead of chain rule
             # Preserves sparsity of V_r (critical for column_subset/random_projection)
             z_scaled = self.sigma * z  # Element-wise: O(r)
-            v += self.V_r @ z_scaled  # Sparse matrix-vector: O(nnz(V_r))
+            v += self.V_r @ z_scaled + self.Dw0  # Sparse matrix-vector: O(nnz(V_r))
             # Still need u for non-negativity constraint
-            u = self.U_r @ z
+            u = self.w0 + self.U_r @ z
 
         # BPR objective
         f_bpr = bpr_objective(v, self.capacity, self.t_0, self.alpha, self.beta)
 
         # OD conservation: A1*y + M*z = d_multi (using precomputed M)
         if self.r > 0:
-            od_flow = self.A1 @ y + self.M @ z
+            od_flow = self.A1 @ y + self.M @ z + self.A2w0
         else:
             od_flow = self.A1 @ y
         od_error = od_flow - self.d_multi
@@ -1409,9 +1436,9 @@ class ALM:
         if self.r > 0:
             # Factored form: V_r @ (sigma * z) - exploits V_r sparsity
             z_scaled = self.sigma * z
-            v += self.V_r @ z_scaled
+            v += self.V_r @ z_scaled + self.Dw0
             # Compute u for OD flow and non-negativity constraint
-            u = self.U_r @ z
+            u = self.w0 + self.U_r @ z
 
         # BPR objective
         f_bpr = bpr_objective(v, self.capacity, self.t_0, self.alpha, self.beta)
@@ -1592,7 +1619,8 @@ class ALM:
             od_flow = od_flow_cached
         else:
             if self.r > 0:
-                u = u_cached if u_cached is not None else self.U_r @ z
+                u = (u_cached if u_cached is not None
+                     else self.w0 + self.U_r @ z)
                 od_flow = self.A1 @ y + self.A2 @ u
             else:
                 od_flow = self.A1 @ y
@@ -2241,6 +2269,7 @@ def main(config):
         beta_penalty=config["alm"]["beta_penalty"],
         tolerance=tolerance,
         random_state=random_state,
+        centered=bool(config.get("svd_centered", False)),
     )
 
     result = optimizer.optimize(

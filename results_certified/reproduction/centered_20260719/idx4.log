@@ -1,0 +1,107 @@
+
+=====================================================================================================
+ COMPRESSED TAP OPTIMIZATION
+=====================================================================================================
+    Found OD information in route file
+  Reference link volumes: min=0.00, max=22380.62, mean=2399.30
+  Zero volume links: 28 / 2950
+
+STEP 0: Identify mandatory major paths
+  Paths that MUST be major (max flow per OD): 17464
+  Paths that CAN be minor: 25310
+
+Multi-path OD analysis:
+  # Multi-path ODs: 17464
+  # Paths in multi-path ODs: 42774
+  Flow range: [0.03, 1093.25]
+
+STEP 1: Maximum number of minor paths
+  Each OD must have >=1 major path
+  For OD with N paths: max N-1 minor paths
+  Total paths in multi-ODs: 42774
+  # Multi-path ODs: 17464
+  Max possible minor paths = 42774 - 17464 = 25310
+
+STEP 2: Split into K=10 bins using equally-spaced indices
+  Sorted flows from paths that CAN be minor: 25310
+  Indices: [0, 2530, 5061, 7592, 10123, 12654, 15185, 17716, 20247, 22778, 25309]
+  Threshold values: ['0.000000', '0.138533', '0.186655', '0.250897', '0.340533', '0.461887', '0.676579', '1.055310', '1.891770', '4.540590', '273.841000']
+
+Final thresholds (after removing duplicates): 11 values
+  ['0.000000', '0.138533', '0.186655', '0.250897', '0.340533', '0.461887', '0.676579', '1.055310', '1.891770', '4.540590', '273.841000']
+
+Testing threshold = 0.340533
+----------------------------------------------------------------------------------------------------
+  OD analysis: 93135 total ODs
+    Singleton ODs (1 path): 75671
+    Multi-path ODs (2+ paths): 17464
+  Path decomposition:
+    Singleton paths (from 1-path ODs): 75671
+    Major paths (flow >= 0.340533, multi-path ODs): 32650
+    Minor paths (flow < 0.340533, multi-path ODs): 10124
+    Total: 118445
+  Flow distribution:
+    Singleton flow: 869688.29 (76.5%)
+    Major flow: 265813.58 (23.4%)
+    Minor flow: 1991.57 (0.2%)
+    Total flow: 1137493.44
+  Decomposition:
+    Major: 32650 paths (76.3%), flow: 265813.58 (99.3%)
+    Minor: 10124 paths (23.7%), flow: 1991.57 (0.7%)
+  Computing SVD with rank 50...
+    TruncatedSVD completed successfully
+  SVD: 10124 minor paths -> 50 latent variables (compression: 202.48x, time: 0.125s)
+  Total decision variables: 32700 (vs 42774 original paths)
+  [centered] affine SVD representation: w = w0 + U_r z
+  Using cold start for optimization (proportional distribution, 17464 OD pairs)
+
+====================================================================================================================
+AUGMENTED LAGRANGIAN METHOD (KKT PROJECTION + STAGNATION)
+====================================================================================================================
+ Outer  Inner Status    Objective    OD Viol  Minor Viol         c1         c2 Link Vol R^2   Inner(s)   Outer(s)
+--------------------------------------------------------------------------------------------------------------------
+     0    200      F   1.6757e+07  0.1521578  0.1045127   1.00e+03   1.00e+03   0.9954      3.594      3.594
+     1    200      F   1.6770e+07  0.0195260  0.0602238   4.00e+03   4.00e+03   0.9958      3.422      3.438
+     2    200      F   1.6768e+07  0.0181293  0.0273607   4.00e+03   1.60e+04   0.9960      4.156      4.156
+     3    200      F   1.6767e+07  0.0044172  0.0091879   1.60e+04   6.40e+04   0.9961      3.750      3.750
+     4    200      F   1.6767e+07  0.0045397  0.0024418   1.60e+04   2.56e+05   0.9962      4.750      4.766
+     5    200      F   1.6767e+07  0.0013484  0.0001173   6.40e+04   1.02e+06   0.9962      3.984      3.984
+     6      6      S   1.6767e+07  0.0003260  0.0001214   2.56e+05   1.02e+06   0.9962      0.422      0.422
+     7      3      S   1.6767e+07  0.0000674  0.0001129   2.56e+05   4.10e+06   0.9962      0.359      0.359
+     8      5      S   1.6767e+07  0.0002548 -0.0000000   2.56e+05   1.64e+07   0.9962      0.328      0.328
+     9      3      S   1.6767e+07  0.0001155 -0.0000000   1.02e+06   1.64e+07   0.9962      0.328      0.328
+    10      3      S   1.6767e+07  0.0000344 -0.0000000   4.10e+06   1.64e+07   0.9962      0.359      0.359
+
+  Link Volume Analysis:
+    Max absolute error: 1920.45
+    links with >10% error: 308/2950
+    congested links (>50% capacity): 1036
+    Congested links MAE: 150.43
+  OD Constraint Details:
+    Accuracy Metrics:
+      R^2: 1.000000
+      MAE: 0.000000
+      RMSE: 0.000000
+    Violation Metrics:
+      Max violation: 0.0000344
+      Mean violation: 0.0000000
+      OD pairs violated (>0.0001): 0/17464
+  Minor Path Non-negativity Details:
+    All 10124 minor paths have non-negative flow
+
+  Summary:
+    Converged: True
+    BPR (feasible): 1.6767e+07 | Reference: 1.6748e+07
+    Reference Objective Diff (feasible): +0.111139%
+    Reference Objective Diff raw iterate (diagnostic only, may be negative when infeasible): +0.111139%
+    Link Volume R^2: 0.996193, MAE: 70.459168
+    Travel Time R^2: 0.999451, MAE: 0.022775
+    CPU Time: SVD=0.125000s, Optimization=25.734375s
+    Per-iteration CPU Time: Outer=2.339489s, Inner=0.021094s
+    Variables reduced by: 23.55%
+    Speedup upper bound: 1.31x
+
+=====================================================================================================
+ COMPLETE
+=====================================================================================================
+

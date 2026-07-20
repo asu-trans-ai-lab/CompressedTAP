@@ -1,0 +1,19 @@
+{
+ "data_dir": "chicago_sketch",
+ "rank": 50,
+ "random_state": 42,
+ "tolerance": 0.0001,
+ "threshold_index": 7,
+ "demand_file": null,
+ "link_perf_file": null,
+ "alm": {
+  "c1_init": 1000.0,
+  "c2_init": 1000.0,
+  "beta_penalty": 4.0,
+  "max_outer_iter": 20,
+  "max_inner_iter": 200,
+  "stagnation_tol": 1e-06,
+  "stagnation_window": 3
+ },
+ "svd_centered": true
+}

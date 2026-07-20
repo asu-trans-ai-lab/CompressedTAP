@@ -1,0 +1,11 @@
+network,tau,threshold_index,variable_reduction_pct,ref_obj_diff_feasible_pct,code_version,source_evidence,representation
+chicago_sketch,0.0,0,0.0,0.090003,centered_svd_20260719,evidence/centered_20260719/idx0.log,affine_centered_w0
+chicago_sketch,0.138533,1,5.8,0.142088,centered_svd_20260719,evidence/centered_20260719/idx1.log,affine_centered_w0
+chicago_sketch,0.186655,2,11.72,0.136979,centered_svd_20260719,evidence/centered_20260719/idx2.log,affine_centered_w0
+chicago_sketch,0.250897,3,17.63,0.132395,centered_svd_20260719,evidence/centered_20260719/idx3.log,affine_centered_w0
+chicago_sketch,0.340533,4,23.55,0.111139,centered_svd_20260719,evidence/centered_20260719/idx4.log,affine_centered_w0
+chicago_sketch,0.46,5,29.47,0.113264,centered_svd_20260719,evidence/centered_20260719/idx5.log,affine_centered_w0
+chicago_sketch,0.676579,6,35.39,0.088986,centered_svd_20260719,evidence/centered_20260719/idx6.log,affine_centered_w0
+chicago_sketch,1.05531,7,41.3,0.119121,centered_svd_20260719,evidence/centered_20260719/idx7.log,affine_centered_w0
+chicago_sketch,1.89177,8,47.22,0.121362,centered_svd_20260719,evidence/centered_20260719/idx8.log,affine_centered_w0
+chicago_sketch,4.54059,9,53.14,0.084319,centered_svd_20260719,evidence/centered_20260719/idx9.log,affine_centered_w0
