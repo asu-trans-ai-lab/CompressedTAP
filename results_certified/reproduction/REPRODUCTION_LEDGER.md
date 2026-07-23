@@ -29,6 +29,8 @@ Windows 11, Python 3.11, numpy 1.26.4, scipy 1.17.1, single-thread (`OMP_NUM_THR
 
 | 15 | Chicago Regional interface cells (NEW) | Regional enters the same Layer-1 door; C++/Python parity | `interface/run_regional_cpp.py` (v2 pkg + regional branch) | `artifacts/regional_interface/` (instances cr_k32/cr_k64 + CROSSCHECK_RESULT.md) | PRODUCED-HERE 2026-07-18: PASSED (rel 3.8e-14 / 1.7e-8; kernel 1.68x/2.62x; 3,692 used arcs at K=64). **E1-E5 suite run on Regional (same driver/seed): grouped kernel 0.84/1.56/3.77/9.00x at K=8/16/32/64, break-even ~K16, KiB 5453->375 (14.5x); grouped gaps ~0/~0/1.04%/0.25%; weighted<unweighted 4/4. tab:kernel-breakeven Regional rows ADDED, manuscript recompiled clean. Backing: artifacts/regional_interface/E1_E5_suite/** |
 
+| 16 | §5.4/§6 affine offset `w^0` (NEW ablation) | does `x_N = w^0 + U_r z` help? | `artifacts/w0_ablation/run_w0_ablation.py` | `artifacts/w0_ablation/` (3 CSVs + W0_ABLATION_RESULT.md) | PRODUCED-HERE 2026-07-19: **NO — w^0 hurts.** Sparse/anchor-supported (all 24 real cells): LINEAR exact 1e-8..1e-11 vs AFFINE 2.9-190%. Synthetic 64/64 favour LINEAR. Spread-support (demand x4) is a coin flip 7/16 vs 9/16. Harness validated: reproduces frozen I_f median 2.41 exactly. **Claim impact: I_f collapses to 1.00 without w^0 — flow weighting partly compensates the offset.** |
+
 ## Open items
 0. ~~fig_e4_promotion placeholder~~ CLOSED: real `fig_e4_promotion.pdf` from v2 package installed, manuscript recompiled clean.
 1. **#8 rerun blocked** — request `real_network_loader.py` and `run_real_networks.py` from the
