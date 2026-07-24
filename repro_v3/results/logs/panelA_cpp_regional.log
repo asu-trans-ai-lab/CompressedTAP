@@ -1,0 +1,31 @@
+[T4A-cpp] loading regional for metrics
+  n=4,829,025 od=297,900 links=39,018
+[T4A-cpp] reference = C++ tau=0 full solve
+Traceback (most recent call last):
+  File "C:\source_codes\0_source_code_new\compressed_optimization\git_dev\CompressedTAP\repro_v3\python\run_table4A_cpp.py", line 163, in <module>
+    raise SystemExit(main())
+                     ^^^^^^
+  File "C:\source_codes\0_source_code_new\compressed_optimization\git_dev\CompressedTAP\repro_v3\python\run_table4A_cpp.py", line 124, in main
+    x0raw, t0, info0, _ = cpp_solve(exp0, "full", a.max_outer, 0, a.max_inner)
+                          ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\source_codes\0_source_code_new\compressed_optimization\git_dev\CompressedTAP\repro_v3\python\run_table4A_cpp.py", line 82, in cpp_solve
+    raise RuntimeError("C++ produced no x_raw. stdout tail:\n" + r.stdout[-800:])
+RuntimeError: C++ produced no x_raw. stdout tail:
+er 25 iters 23 cons 0.01664 t 998.4s
+  outer 26 iters 23 cons 0.00509 t 1045.4s
+  outer 27 iters 46 cons 0.02173 t 1104.7s
+  outer 28 iters 31 cons 0.02169 t 1168.5s
+  outer 29 iters 37 cons 0.00857 t 1238.6s
+  outer 30 iters 43 cons 0.00894 t 1349.6s
+  outer 31 iters 41 cons 0.01062 t 1444.8s
+  outer 32 iters 58 cons 0.01662 t 1527.6s
+  outer 33 iters 39 cons 0.01411 t 1616.1s
+  outer 34 iters 22 cons 0.00637 t 1657.2s
+  outer 35 iters 20 cons 0.00656 t 1688.3s
+  outer 36 iters 38 cons 0.00943 t 1780.9s
+  outer 37 iters 87 cons 0.02650 t 1925.2s
+  outer 38 iters 58 cons 0.02501 t 2096.8s
+  outer 39 iters 41 cons 0.00907 t 2195.2s
+  outer 40 iters 35 cons 0.00924 t 2288.8s
+RESULT mode=full r_used=0 time_s=2289.3 inner_iters=1208 obj_feasible=19453521.6125 cons=0.009244 pool_gap=2.0293e-02
+

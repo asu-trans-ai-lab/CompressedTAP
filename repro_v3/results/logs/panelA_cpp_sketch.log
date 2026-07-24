@@ -1,0 +1,16 @@
+[T4A-cpp] loading sketch for metrics
+  n=709,567 od=82,083 links=2,950
+[T4A-cpp] reference = C++ tau=0 full solve
+Traceback (most recent call last):
+  File "C:\source_codes\0_source_code_new\compressed_optimization\git_dev\CompressedTAP\repro_v3\python\run_table4A_cpp.py", line 163, in <module>
+    raise SystemExit(main())
+                     ^^^^^^
+  File "C:\source_codes\0_source_code_new\compressed_optimization\git_dev\CompressedTAP\repro_v3\python\run_table4A_cpp.py", line 124, in main
+    x0raw, t0, info0, _ = cpp_solve(exp0, "full", a.max_outer, 0, a.max_inner)
+                          ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\source_codes\0_source_code_new\compressed_optimization\git_dev\CompressedTAP\repro_v3\python\run_table4A_cpp.py", line 82, in cpp_solve
+    raise RuntimeError("C++ produced no x_raw. stdout tail:\n" + r.stdout[-800:])
+RuntimeError: C++ produced no x_raw. stdout tail:
+support-local: m 2950 -> 2932 active (99.4%)
+loaded n=709567 m=2932 n_od=82083 nnz=11605529 r=0 majors=709567 minors=0 (0.3s)
+

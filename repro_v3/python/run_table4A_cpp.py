@@ -98,6 +98,9 @@ def main():
     ap.add_argument("--rank", type=int, default=50)
     ap.add_argument("--max-outer", type=int, default=40)
     ap.add_argument("--max-inner", type=int, default=300)
+    ap.add_argument("--ref-outer", type=int, default=15,
+                    help="outers for the tau=0 full reference (decision A: large-net "
+                         "reference resolution ~1e-2, so a short full solve suffices)")
     ap.add_argument("--tol", type=float, default=1e-6)
     a = ap.parse_args()
     cfg = NETS[a.net]
@@ -121,7 +124,7 @@ def main():
     exp0 = SCRATCH / a.net / "tau0"
     print("[T4A-cpp] reference = C++ tau=0 full solve", flush=True)
     meta0 = export(cfg["dir"], cfg["pool"], cfg["multi"], 0.0, 0, exp0)  # rank 0: full mode, no SVD
-    x0raw, t0, info0, _ = cpp_solve(exp0, "full", a.max_outer, 0, a.max_inner)
+    x0raw, t0, info0, _ = cpp_solve(exp0, "full", a.ref_outer, 0, a.max_inner)
     x0f = M.convert_euclid(x0raw, P["d"], P["p2od"])
     v_ref = M.link_flow(P, x0f); f_ref = float(P["bpr"].beckmann(v_ref))
     print(f"  f_ref={f_ref:,.4f} t={t0:.1f}s inner={info0.get('inner_iters')}", flush=True)
