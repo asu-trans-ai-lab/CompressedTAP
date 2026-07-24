@@ -120,7 +120,7 @@ def main():
     # ---- reference (decision a): the tau=0 C++ full solve
     exp0 = SCRATCH / a.net / "tau0"
     print("[T4A-cpp] reference = C++ tau=0 full solve", flush=True)
-    meta0 = export(cfg["dir"], cfg["pool"], cfg["multi"], 0.0, a.rank, exp0)
+    meta0 = export(cfg["dir"], cfg["pool"], cfg["multi"], 0.0, 0, exp0)  # rank 0: full mode, no SVD
     x0raw, t0, info0, _ = cpp_solve(exp0, "full", a.max_outer, 0, a.max_inner)
     x0f = M.convert_euclid(x0raw, P["d"], P["p2od"])
     v_ref = M.link_flow(P, x0f); f_ref = float(P["bpr"].beckmann(v_ref))
