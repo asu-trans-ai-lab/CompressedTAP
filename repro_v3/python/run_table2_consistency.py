@@ -105,11 +105,14 @@ def op_fw_full(P, tol, max_iter=200000, max_seconds=600.0):
     t = time.perf_counter()
     it = 0
     gap_rel = np.inf
+    best_x, best_gap = x.copy(), np.inf
     for it in range(1, max_iter + 1):
         c = np.asarray(B @ bpr.t(v)).flatten()
         s_lmo = lmo(c, d)
         dx = s_lmo - x
         gap_rel = float(c @ (x - s_lmo)) / max(abs(float(c @ x)), 1e-12)
+        if gap_rel < best_gap:
+            best_gap, best_x = gap_rel, x.copy()
         if gap_rel <= tol or (time.perf_counter() - t) > max_seconds:
             break
         dv = np.asarray(B.T @ dx).flatten()
@@ -128,7 +131,7 @@ def op_fw_full(P, tol, max_iter=200000, max_seconds=600.0):
             alpha = 0.5 * (lo + hi)
         x = x + alpha * dx
         v = v + alpha * dv
-    return x, time.perf_counter() - t, it, gap_rel
+    return best_x, time.perf_counter() - t, it, best_gap
 
 
 def op_gp_full(P, tol, max_iter=200000, max_seconds=600.0):
@@ -146,11 +149,18 @@ def op_gp_full(P, tol, max_iter=200000, max_seconds=600.0):
     xp = gp = None
     it = 0
     gap_rel = np.inf
+    # The Barzilai-Borwein step is deliberately NONMONOTONE: the objective may rise before
+    # it falls, so the LAST iterate is not necessarily the best one found. Returning it
+    # made a 1200 s reference run worse than a 600 s run of the same operator on Chicago
+    # Sketch (REMARKS.md R11). Track and return the best iterate by certificate.
+    best_x, best_gap = x.copy(), np.inf
     for it in range(1, max_iter + 1):
         v = v0 + np.asarray(B.T @ x).flatten()
         c = np.asarray(B @ bpr.t(v)).flatten()
         s_lmo = lmo(c, d)
         gap_rel = float(c @ (x - s_lmo)) / max(abs(float(c @ x)), 1e-12)
+        if gap_rel < best_gap:
+            best_gap, best_x = gap_rel, x.copy()
         if gap_rel <= tol or (time.perf_counter() - t) > max_seconds:
             break
         if xp is None:
@@ -163,7 +173,7 @@ def op_gp_full(P, tol, max_iter=200000, max_seconds=600.0):
                 step = 1.0
         xp, gp = x, c
         x = M.convert_euclid(x - step * c, d, p2od)
-    return x, time.perf_counter() - t, it, gap_rel
+    return best_x, time.perf_counter() - t, it, best_gap
 
 
 def op_alm_compressed(P, C, tol, max_outer=30):

@@ -4,8 +4,8 @@ Points a second reader should check independently before any `[fill]` cell is tr
 Each remark states what was found, how it was established, what was ruled out, and what
 it changes. Everything here is reproducible from this tree; producing scripts are named.
 
-Status: R1–R3 and R7–R8 established and acted on; R4–R6 are open items that need an
-author ruling or further work. Nothing in the manuscript has been edited on the basis of these remarks.
+Status: R1, R3, R7–R9, R11–R12 established and acted on; R2 superseded by R10; R4–R6
+and R10's remedy are open items needing an author ruling or further work. Nothing in the manuscript has been edited on the basis of these remarks.
 
 ---
 
@@ -300,6 +300,64 @@ Chicago Regional has 4.8M pool rows, about 6.8x Sketch.
 `ca.solve_full` and `ca.solve_compressed` do not. ALM therefore cannot be time-capped in
 Panel A, where it runs 4 thresholds x 3 repetitions x 3 networks. Needs a wall-clock
 guard before that campaign starts.
+
+---
+
+## R11. A real bug: the BB step is nonmonotone and the drivers returned the last iterate
+
+**Symptom on Chicago Sketch.** Every full-representation operator beat the reference, and
+one of them was the *same operator run longer*:
+
+| row | `Gap_F` | CPU | note |
+|---|---|---|---|
+| GP, used as reference | +0.000000% | 1200.9 s (cap) | certificate 3.75e-03 |
+| ALM | -0.028254% | 758.7 s | |
+| Frank-Wolfe | -0.057411% | 600.1 s (cap) | |
+| **Gradient projection** | **-0.054293%** | **601.5 s (cap)** | **same operator, half the time, better point** |
+
+A 600 s GP run producing a better point than a 1200 s GP run cannot be a convergence
+story. The cause is that the Barzilai-Borwein step is **deliberately nonmonotone** -- the
+objective is allowed to rise before it falls, which is where its speed comes from -- and
+the driver returned the *last* iterate rather than the best one seen. Running longer
+therefore does not guarantee a better answer.
+
+**Fix.** `op_gp_full` and `op_fw_full` now track the best iterate by certificate and
+return that. (FW's step is monotone in the objective, but the wall-clock cap can stop it
+anywhere, so it gets the same treatment.) This is standard practice for nonmonotone
+methods and should have been there from the start.
+
+**What it invalidates.** The Sketch rows above, and any timing comparison drawn from
+them. The Sioux rows are unaffected in substance -- GP converged to 7.55e-10 there, so
+best and last coincide -- but they will be regenerated under the fixed code anyway.
+
+**Caution for the reader.** This bug and R10 point the same way and could be confused. R10
+is real and independent: even with best-iterate tracking, GP on Sketch reached only
+3.75e-03 in twenty minutes against 7.55e-10 in one second on Sioux. Fixing R11 removes
+the absurdity of longer-is-worse; it does not make a fixed operator a safe reference.
+
+---
+
+## R12. `delta_F` earns its place: 36.4% on the compressed Sketch row
+
+The compressed ALM row on Chicago Sketch (tau = 1.01 at the 90th percentile, r = 50,
+118,174 majors of 709,567 paths) reports
+
+    delta_F = 36.3803%,   Gap_F = +0.231375%,   link difference 2.0712%
+
+against `delta_F = 0.0000%` for every full-representation row and for the compressed row
+on Sioux. The common feasibility conversion is moving **over a third of the L1 path-flow
+mass** before the objective is evaluated.
+
+This is exactly what the v3 metric was introduced to expose. The manuscript's own
+justification -- "the added column `delta_F` makes the size of the conversion visible
+rather than hiding it in the evaluation procedure" -- is vindicated on the first large
+instance tried: a reader seeing only `Gap_F = +0.23%` would conclude the compressed
+solution was close, without knowing how much repair produced that number.
+
+Two implications. First, `delta_F` must be reported in Panel A for every threshold, not
+only where it happens to be small. Second, a `Gap_F` obtained after a 36% conversion is a
+statement about the *converted* point, not about what the compressed solver returned, and
+the text should say so.
 
 ---
 
