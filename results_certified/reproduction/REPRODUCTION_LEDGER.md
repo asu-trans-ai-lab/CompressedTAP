@@ -31,6 +31,8 @@ Windows 11, Python 3.11, numpy 1.26.4, scipy 1.17.1, single-thread (`OMP_NUM_THR
 
 | 16 | §5.4/§6 affine offset `w^0` (NEW ablation) | does `x_N = w^0 + U_r z` help? | `artifacts/w0_ablation/run_w0_ablation.py` | `artifacts/w0_ablation/` (3 CSVs + W0_ABLATION_RESULT.md) | PRODUCED-HERE 2026-07-19: **NO — w^0 hurts.** Sparse/anchor-supported (all 24 real cells): LINEAR exact 1e-8..1e-11 vs AFFINE 2.9-190%. Synthetic 64/64 favour LINEAR. Spread-support (demand x4) is a coin flip 7/16 vs 9/16. Harness validated: reproduces frozen I_f median 2.41 exactly. **Claim impact: I_f collapses to 1.00 without w^0 — flow weighting partly compensates the offset.** |
 
+| 17 | §5.4 + §6 `tab:portability` / `fig:solver-portability` (latent FW, LPG) | representation gain is operator-independent, grows with K/m | v3.1 pkg `repro/fw/reproduce.py`, `run_portability_ext.py` (**FOUND locally 2026-07-19 at `TR_part B/files (8)/compressed_TAP_repro_package_v3_1_LPG`**) | `artifacts/fw_lpg_portability_v3_1/` (solver_portability.csv + linux/windows runs + portability_ext.csv + LPG/FW sources + SOLVER_PORTABILITY.md) | **CLOSED 2026-07-19**: manuscript Table 7 verified cell-by-cell against CSV (LPG 1.02/1.17/3.00/7.70/9.36; FW 1.00/1.07/0.90/2.46/19.7; RC gap 0.00/1.19/1.78/1.85/1.25). Manifest 179/179 substantive files OK (5 benign diffs = regenerated instances/figures). **Cross-machine check: Linux vs Windows deterministic columns match on 36/36 solved rows, 0 mismatches; wall times 0.28-10.8x (median 2.2x).** |
+
 ## Open items
 0. ~~fig_e4_promotion placeholder~~ CLOSED: real `fig_e4_promotion.pdf` from v2 package installed, manuscript recompiled clean.
 1. **#8 rerun blocked** — request `real_network_loader.py` and `run_real_networks.py` from the
