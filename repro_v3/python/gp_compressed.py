@@ -65,7 +65,7 @@ class AffineBoundProjector:
 
 
 def solve_gp_signed(P, C, cert_fn, tol=1e-6, max_iter=20000, max_seconds=600.0,
-                    penalty=1e3):
+                    penalty=1e3, cert_every=25):
     """Projected gradient on the compressed representation.
 
     cert_fn(x_full) -> relative duality gap, so this operator stops on exactly the same
@@ -118,8 +118,15 @@ def solve_gp_signed(P, C, cert_fn, tol=1e-6, max_iter=20000, max_seconds=600.0,
     cg = np.inf
     for it in range(1, max_iter + 1):
         g = grad(w)
-        cg = cert_fn(full_x(w))
-        if cg <= tol or (time.perf_counter() - t0) > max_seconds:
+        # The certificate rebuilds the full path vector and projects every OD block, so it
+        # is far more expensive than one optimisation step; check it every `cert_every`
+        # iterations rather than every iteration (REMARKS.md R8).
+        if it == 1 or it % cert_every == 0:
+            cg = cert_fn(full_x(w))
+            if cg <= tol:
+                break
+        if (time.perf_counter() - t0) > max_seconds:
+            cg = cert_fn(full_x(w))
             break
         if wp is None:
             step = 1.0 / max(float(np.max(np.abs(g))), 1e-12)
@@ -131,4 +138,6 @@ def solve_gp_signed(P, C, cert_fn, tol=1e-6, max_iter=20000, max_seconds=600.0,
                 step = 1.0
         wp, gp = w, g
         w = proj(w - step * g)
+    else:
+        cg = cert_fn(full_x(w))
     return full_x(w), time.perf_counter() - t0, it, cg

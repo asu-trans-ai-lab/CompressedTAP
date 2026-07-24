@@ -52,16 +52,64 @@ def project_simplex_block(y: np.ndarray, mass: float) -> np.ndarray:
 
 def convert_euclid(x: np.ndarray, d: np.ndarray, p2od: np.ndarray,
                    od_slices=None) -> np.ndarray:
-    """Per-OD Euclidean projection onto {x >= 0, Ax = d}.  p2od maps path -> OD index."""
-    xf = np.empty_like(x, dtype=float)
-    if od_slices is None:
-        order = np.argsort(p2od, kind="stable")
-        starts = np.searchsorted(p2od[order], np.arange(len(d)))
-        ends = np.append(starts[1:], len(order))
-        od_slices = [order[s:e] for s, e in zip(starts, ends)]
-    for i, idx in enumerate(od_slices):
-        if idx.size:
-            xf[idx] = project_simplex_block(x[idx], float(d[i]))
+    """Per-OD Euclidean projection onto {x >= 0, Ax = d}.  p2od maps path -> OD index.
+
+    Segmented and fully vectorised: one lexsort plus a segmented cumulative sum, with no
+    Python loop over OD pairs.  This routine is called on every iteration of every
+    operator and inside every certificate evaluation, so the loop version dominated the
+    run time on instances with many OD pairs (see REMARKS.md R8).
+    `od_slices` is accepted and ignored, for call-site compatibility.
+    """
+    x = np.asarray(x, dtype=float)
+    p2od = np.asarray(p2od)
+    n_od = len(d)
+    # sort by (OD, descending value)
+    order = np.lexsort((-x, p2od))
+    xs = x[order]
+    ods = p2od[order]
+    # block starts / sizes in the sorted array
+    starts = np.searchsorted(ods, np.arange(n_od))
+    sizes = np.diff(np.append(starts, len(xs)))
+    # within-block descending cumulative sum
+    cs = np.cumsum(xs)
+    base = np.zeros(n_od)
+    nz = sizes > 0
+    base[nz] = cs[starts[nz]] - xs[starts[nz]]          # sum strictly before each block
+    seg_cs = cs - base[ods]
+    rank = np.arange(len(xs)) - starts[ods] + 1          # 1-based position in block
+    css = seg_cs - d[ods]
+    cond = xs - css / rank > 0
+    # last True per block = largest rank with cond
+    rho = np.zeros(n_od, dtype=int)
+    np.maximum.at(rho, ods[cond], rank[cond])
+    theta = np.zeros(n_od)
+    has = rho > 0
+    if np.any(has):
+        pos = starts[has] + rho[has] - 1
+        theta[has] = css[pos] / rho[has]
+    # blocks where no index satisfied the condition fall back to the uniform split
+    if np.any(~has & nz):
+        bad = np.nonzero(~has & nz)[0]
+        theta[bad] = (seg_cs[starts[bad] + sizes[bad] - 1] - d[bad]) / sizes[bad]
+    xf = np.maximum(x - theta[p2od], 0.0)
+
+    # Numerical guard. seg_cs is formed by subtracting one global cumulative sum from
+    # another; on very large pools those two quantities are large and nearly equal, so
+    # cancellation can cost significant digits. Verify the result actually lands on the
+    # demand constraint and fall back to the per-block routine if it does not. The check
+    # is O(n) and, on every instance tested so far, never fires.
+    got = np.zeros(n_od)
+    np.add.at(got, p2od, xf)
+    scale = np.maximum(np.abs(d), 1.0)
+    if np.max(np.abs(got - d) / scale) > 1e-9:
+        xf = np.empty_like(x)
+        order2 = np.argsort(p2od, kind="stable")
+        st = np.searchsorted(p2od[order2], np.arange(n_od))
+        en = np.append(st[1:], len(order2))
+        for i in range(n_od):
+            idx = order2[st[i]:en[i]]
+            if idx.size:
+                xf[idx] = project_simplex_block(x[idx], float(d[i]))
     return xf
 
 
