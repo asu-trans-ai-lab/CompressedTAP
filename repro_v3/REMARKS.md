@@ -228,6 +228,34 @@ Panel B's GP speedup column must not be produced until it is fixed.
 
 ---
 
+## R9. Two Python loops over OD pairs dominated the run time; the fix is not "vectorise it"
+
+Both hot inner routines looped over OD pairs in Python and were called once per operator
+iteration. On Chicago Sketch (**709,567 paths, 82,083 OD pairs, 2,950 links**) that is
+82,083 interpreter iterations per iteration of every solver.
+
+| routine | before | after | check |
+|---|---|---|---|
+| `v3_metrics.convert_euclid` (per-OD simplex projection) | per-OD Python loop | one lexsort + segmented cumulative sum | matches loop to **5.8e-11** across perturbation scales with up to 49% negative entries; **6.9x** faster on Sioux |
+| `run_table2_consistency.LMOIndex` (linear minimisation oracle) | per-OD Python loop | grouping sorted **once** at construction, then two C-level `reduceat` reductions per call | matches loop **exactly (0.0e+00)**; **18.6x** faster on Sioux |
+
+**The lesson worth recording.** The obvious fix for the oracle — a `lexsort` inside every
+call — was implemented first and measured *slower than the Python loop* on Sioux (0.7x),
+because sorting 6,464 elements every call costs more than 528 small `argmin` calls. What
+made it fast was noticing that **the grouping never changes between iterations**, so the
+sort belongs in the constructor and only the segmented reduction belongs in the call.
+Both speedups grow with the OD count, so the margin on Sketch and Regional is much larger
+than the Sioux figures above.
+
+**Numerical caveat carried with the projection.** The segmented cumulative sum forms its
+per-block sums by subtracting one global cumulative sum from another. On very large pools
+(Regional: 4.8M paths, running sums of order 1e10) cancellation can cost significant
+digits. An O(n) guard verifies the result lands on the demand constraint and falls back to
+the exact per-block routine otherwise. It has not fired on any instance tested; a reader
+running Regional should confirm it still does not.
+
+---
+
 ## Gate status
 
 | gate | meaning | status |

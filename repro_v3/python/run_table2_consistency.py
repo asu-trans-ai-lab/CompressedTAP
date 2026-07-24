@@ -56,13 +56,36 @@ def op_alm_full(P, tol, max_outer=40):
     return s["x_raw"], time.perf_counter() - t, s.get("inner_iters", -1)
 
 
-def _lmo(c, d, sl, n):
-    """Linear minimization oracle on the OD-simplex product: all demand on cheapest path."""
-    s = np.zeros(n)
-    for i, idx in enumerate(sl):
-        if idx.size:
-            s[idx[np.argmin(c[idx])]] = d[i]
-    return s
+class LMOIndex:
+    """Linear minimization oracle on the OD-simplex product: all demand on the cheapest
+    path of each OD pair.
+
+    The grouping by OD does not change between iterations, so the sort that makes each
+    OD's paths contiguous is done ONCE here; each call is then two C-level segmented
+    reductions. The per-OD Python loop this replaces ran once per FW/GP iteration and
+    cost 82,083 interpreter iterations on Chicago Sketch alone. (A per-call lexsort was
+    tried first and is slower than the loop on small instances -- see REMARKS.md R9.)
+    """
+
+    def __init__(self, p2od, n_od, n):
+        self.n = n
+        self.order = np.argsort(p2od, kind="stable")
+        ods = p2od[self.order]
+        starts = np.searchsorted(ods, np.arange(n_od))
+        sizes = np.diff(np.append(starts, n))
+        self.nz = sizes > 0
+        self.starts = starts[self.nz]
+        self.sizes = sizes[self.nz]
+        self.pos = np.arange(n)
+
+    def __call__(self, c, d):
+        s = np.zeros(self.n)
+        cs = c[self.order]
+        blockmin = np.minimum.reduceat(cs, self.starts)
+        hit = cs == np.repeat(blockmin, self.sizes)
+        first = np.minimum.reduceat(np.where(hit, self.pos, self.n), self.starts)
+        s[self.order[first]] = d[self.nz]
+        return s
 
 
 def op_fw_full(P, tol, max_iter=200000, max_seconds=600.0):
@@ -74,9 +97,9 @@ def op_fw_full(P, tol, max_iter=200000, max_seconds=600.0):
     costs), so the exact step is found by bisection on the derivative.
     """
     B, d, p2od, bpr = P["B"], P["d"], P["p2od"], P["bpr"]
-    sl = M.od_slice_index(P)
     n = P["n"]
-    x = M.convert_euclid(np.maximum(P["x0"], 0.0), d, p2od, sl)
+    lmo = LMOIndex(p2od, len(d), n)
+    x = M.convert_euclid(np.maximum(P["x0"], 0.0), d, p2od)
     v0 = P.get("v0", 0.0)
     v = v0 + np.asarray(B.T @ x).flatten()
     t = time.perf_counter()
@@ -84,7 +107,7 @@ def op_fw_full(P, tol, max_iter=200000, max_seconds=600.0):
     gap_rel = np.inf
     for it in range(1, max_iter + 1):
         c = np.asarray(B @ bpr.t(v)).flatten()
-        s_lmo = _lmo(c, d, sl, n)
+        s_lmo = lmo(c, d)
         dx = s_lmo - x
         gap_rel = float(c @ (x - s_lmo)) / max(abs(float(c @ x)), 1e-12)
         if gap_rel <= tol or (time.perf_counter() - t) > max_seconds:
@@ -115,9 +138,9 @@ def op_gp_full(P, tol, max_iter=200000, max_seconds=600.0):
     operators are compared at matched accuracy rather than on their own private criteria.
     """
     B, d, p2od, bpr = P["B"], P["d"], P["p2od"], P["bpr"]
-    sl = M.od_slice_index(P)
     n = P["n"]
-    x = M.convert_euclid(np.maximum(P["x0"], 0.0), d, p2od, sl)
+    lmo = LMOIndex(p2od, len(d), n)
+    x = M.convert_euclid(np.maximum(P["x0"], 0.0), d, p2od)
     v0 = P.get("v0", 0.0)
     t = time.perf_counter()
     xp = gp = None
@@ -126,7 +149,7 @@ def op_gp_full(P, tol, max_iter=200000, max_seconds=600.0):
     for it in range(1, max_iter + 1):
         v = v0 + np.asarray(B.T @ x).flatten()
         c = np.asarray(B @ bpr.t(v)).flatten()
-        s_lmo = _lmo(c, d, sl, n)
+        s_lmo = lmo(c, d)
         gap_rel = float(c @ (x - s_lmo)) / max(abs(float(c @ x)), 1e-12)
         if gap_rel <= tol or (time.perf_counter() - t) > max_seconds:
             break
@@ -166,11 +189,13 @@ def main():
     print(f"  paths={P['n']} od={P['n_od']} links={P['B'].shape[1]}", flush=True)
 
     # ---- shared optimality certificate (relative FW duality gap of the converted point)
+    lmo_ref = LMOIndex(P["p2od"], P["n_od"], P["n"])
+
     def cert(x_raw):
         xf = M.convert_euclid(x_raw, P["d"], P["p2od"], sl)
         v = M.link_flow(P, xf)
         c = np.asarray(P["B"] @ P["bpr"].t(v)).flatten()
-        sm = _lmo(c, P["d"], sl, P["n"])
+        sm = lmo_ref(c, P["d"])
         return float(c @ (xf - sm)) / max(abs(float(c @ xf)), 1e-12)
 
     # ---- reference: full-path gradient projection converged to ref_tol.
