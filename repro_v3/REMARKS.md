@@ -538,6 +538,37 @@ outside the pass condition and must be read from the table above, not from the v
 
 ---
 
+## R18 [RESOLVED 2026-07-24, author]: use the submitted tau VALUES + the RECOMPUTED reduction
+
+Author decision: the revnote requires preserving the submitted threshold GRID (the tau
+values), and decision 2 recomputes the reduction column. So Panel A reports the original
+tau labels (0/0.23/0.46/1.03 etc.) with the reduction RE-COMPUTED from the current
+split_major_minor -- e.g. regional tau=0.23 -> 53.8%, not the submitted 23.9%. This is
+compliant: the tau grid is preserved, the reduction is a rerun output. No tau remapping.
+The difference from the submitted reductions reflects the rerun's nominal-flow split and is
+stated as such. Original investigation note follows.
+
+### Original note
+
+The C++ Panel A run gives, for Chicago Regional:
+  tau=0.23 -> reduction 53.8% (GapF +2.18%, R2 0.928, delta_F 89.7%)
+The submitted manuscript grid says regional tau=0.23 -> 23.9%, and 53.8% is its tau=1.03
+value. So `split_major_minor(P, tau)` at tau=0.23 produces the split the manuscript
+attributes to tau=1.03 -- an apparent tau-scale mismatch between the certified loader's
+absolute-flow threshold and the manuscript's tau values.
+
+This is NOT a C++ artifact: the Python driver passes the same taus to the same
+split_major_minor. It affects the reduction column (and hence which compressed problem is
+solved at each labelled tau) on all networks. Two possibilities: (a) the manuscript tau is
+a quantile or scaled quantity, not an absolute nominal-flow threshold; (b) the nominal
+flow x0 used now differs from the submitted run. Must be resolved before the table is
+final, since 'preserve the submitted threshold grid' requires the labelled tau to select
+the same split. Flagged mid-run; the numbers produced are internally valid (Gate 2 holds),
+but the tau labels may need remapping. Investigate against the submitted appendix
+reductions after the run completes.
+
+---
+
 ## Gate status
 
 | gate | meaning | status |

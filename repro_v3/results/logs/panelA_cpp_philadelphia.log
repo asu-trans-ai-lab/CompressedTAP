@@ -1,3 +1,7 @@
 [T4A-cpp] loading philadelphia for metrics
   n=1,846,068 od=601,644 links=40,003
 [T4A-cpp] reference = C++ tau=0 full solve
+  f_ref=225,219,601.0886 t=170.4s inner=276
+[T4A-cpp] tau=0.0
+  red=  0.0%  dF= 0.0000%  GapF= +0.00000%  R2=1.0000  cpu=170.4s
+[T4A-cpp] tau=0.67
