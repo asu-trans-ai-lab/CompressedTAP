@@ -4,8 +4,8 @@ Points a second reader should check independently before any `[fill]` cell is tr
 Each remark states what was found, how it was established, what was ruled out, and what
 it changes. Everything here is reproducible from this tree; producing scripts are named.
 
-Status: R1–R3 established and acted on; R4–R6 are open items that need an author ruling
-or further work. Nothing in the manuscript has been edited on the basis of these remarks.
+Status: R1–R3 and R7–R8 established and acted on; R4–R6 are open items that need an
+author ruling or further work. Nothing in the manuscript has been edited on the basis of these remarks.
 
 ---
 
@@ -181,12 +181,59 @@ instance are `B1 (533,76)`, `D (76,50)`, `M (528,50)`, `U (5931,50)`, `s=533`, `
 
 ---
 
+## R8. The compressed rows stall at a shared certificate — a representation limit
+
+**Finding (Sioux SFK25, tau=600 at the 90th percentile, r=50).** Two operators with
+nothing in common but the representation stop at the same place:
+
+| representation | operator | certificate | iterations | CPU | `Gap_F` | `delta_F` |
+|---|---|---|---|---|---|---|
+| full | GP [reference] | 7.55e-10 | 186 | 1.07 s | +0.000000% | 0.0000% |
+| full | GP | 7.81e-07 | 89 | 1.55 s | +0.000000% | 0.0000% |
+| full | Frank-Wolfe | 9.99e-07 | 96,758 | 162.25 s | +0.000116% | 0.0000% |
+| full | ALM | 1.14e-03 | 1,031 | 2.11 s | +0.048187% | 0.0000% |
+| **compressed** | **ALM** | **2.99e-02** | 258 | 0.49 s | **+3.490901%** | 0.0000% |
+| **compressed** | **GP-signed (penalised)** | **2.91e-02** | 6,303 | 600 s (capped) | **+3.460673%** | 0.1031% |
+
+The full-representation operators reach 1e-6..1e-10. Both compressed operators stall
+three orders of magnitude short, at the *same* certificate and within 0.03 percentage
+points of the same objective gap — despite one using multipliers plus penalty and the
+other Dykstra projection plus penalty. **That signature is a property of the feasible
+set, not of either solver:** at this threshold and rank the signed-SVD representation
+simply cannot get nearer the optimum.
+
+**Why this matters for Table 2.** The table's stated purpose is to show "the compressed
+formulation is not intrinsically tied to the AL operator". These two rows support that
+directly: change the operator entirely and the compressed optimum does not move.
+
+**A symmetry worth noting.** On the full representation GP dominates (1.55 s vs ALM's
+2.11 s and FW's 162 s); on the compressed representation ALM dominates by three orders of
+magnitude (0.49 s / 258 iterations vs 600 s / 6,303 iterations). This is consistent with
+the manuscript's framing that the AL method is designed for the compressed structure,
+whose dense constraint it carries through multipliers rather than through projection.
+
+**Caveat.** `GP-signed` hit its 600 s cap rather than converging, so slow further progress
+cannot be strictly excluded — though it had already passed ALM's certificate (2.91e-02 vs
+2.99e-02) when it stopped. Its `delta_F = 0.1031%` (the only nonzero one in the table) is
+the expected trace of carrying the dense reconstructed nonnegativity by penalty: the
+terminal iterate retains small negative minor flows that the conversion then removes.
+
+**Implementation flaw to fix before Panel B.** `gp_compressed.py` evaluates the shared
+certificate on *every* iteration, and that evaluation rebuilds the full path vector
+(a 5,931x50 product) and runs a 528-OD Python projection loop. Most of the 600 s went
+there rather than into the optimisation. The certificate should be checked every ~25
+iterations. This does not affect the plateau above — that is set by the representation —
+but it does make the reported CPU an overstatement of the operator's intrinsic cost, and
+Panel B's GP speedup column must not be produced until it is fixed.
+
+---
+
 ## Gate status
 
 | gate | meaning | status |
 |---|---|---|
 | 0 | metric module correct (7 checks) | PASS |
 | 1 | reference self-evaluates to `Gap_F = 0`, `R^2 = 1` | PASS (Sioux) |
-| 2 | no negative `Gap_F` anywhere | FAILED with ALM reference -> PASS expected with GP reference (rerun in progress) |
+| 2 | no negative `Gap_F` anywhere | **PASS** (Sioux, GP reference; all six rows positive) |
 | 3 | reported identities consistent (`K/q` vs `n`, `s+r`) | not yet reached |
 | 4 | every rendered LaTeX row traces to a CSV row | not yet reached |
