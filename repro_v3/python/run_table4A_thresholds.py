@@ -129,6 +129,17 @@ def main():
     print(f"  f_ref={f_ref:,.4f} source={ref['source']} cert={g_ref:.3e} "
           f"spread={ref['obj_spread_pct']:.6f}%", flush=True)
 
+    out = Path(a.out) if a.out else HERE.parent / "results" / f"table4A_{a.net}.csv"
+    out.parent.mkdir(parents=True, exist_ok=True)
+
+    def flush(rows):
+        # Rewrite the CSV after every completed threshold so a network stopped early (net
+        # ceiling, R14 overrun) keeps its finished rows instead of losing everything.
+        keys = sorted({k for r in rows for k in r})
+        with out.open("w", newline="") as f:
+            w = csv.DictWriter(f, fieldnames=keys)
+            w.writeheader(); w.writerows(rows)
+
     rows = []
     n = P["n"]
     for tau in cfg["taus"]:
@@ -186,6 +197,7 @@ def main():
             m["w0free_delta_F_pct"] = w0free["delta_F_pct"]
             m["w0free_link_R2"] = w0free["link_R2"]
         rows.append(m)
+        flush(rows)
         print(f"  red={reduction:5.1f}%  raw={m['raw_obj_diff_pct']:+8.4f}%  "
               f"dF={m['delta_F_pct']:7.4f}%  GapF={m['Gap_F_pct']:+9.5f}%  "
               f"R2={m['link_R2']:.4f}  inner={inner}  pre={t_pre:.1f}s  "

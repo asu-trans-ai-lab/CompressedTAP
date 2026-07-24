@@ -396,6 +396,68 @@ and FW, `Gap_F` positive on all four rows, Gate 2 PASS, candidate spread 0.048% 
 
 ---
 
+## R14. The wall-clock guard is checked at outer-iteration boundaries only
+
+`solve_full`/`solve_compressed` check `max_seconds` at each OUTER iteration boundary, not
+inside the inner L-BFGS-B solve. On huge networks a single outer iteration can itself
+exceed the cap: 200 inner iterations x a 4.8M-path matvec at ~6 s each is ~1000-1200 s,
+so on Chicago Regional the ALM reference candidate ran past its 900 s cap and only stopped
+after completing the first outer iteration (~21 min observed).
+
+**Consequence, not a bug.** The effective ceiling for ALM on the large networks is
+"cap + one outer iteration", which can be roughly 2x the nominal cap. The run still stops;
+the campaign does not hang. But a reader must not read `--ref-cap 900` as "ALM ran for at
+most 900 s" -- the actual candidate time is recorded per row and should be read from there,
+not inferred from the cap.
+
+The GP and FW operators do not have this issue: their loops check the clock every
+iteration, so their caps are tight (GP stopped at 905.9 s on Regional). Only the two AL
+solvers, whose inner work is a single opaque L-BFGS-B call, overrun by up to one outer
+iteration.
+
+If a tighter ALM ceiling is ever needed, lowering `maxiter_inner` bounds the overrun
+directly (fewer inner iterations per outer); it was left at the certified default here so
+the reference candidate is the same AL method the paper describes.
+
+---
+
+## R15. Best-of-all reference is only well-defined among CONVERGED candidates
+
+On Chicago Regional the tau=0 row came out **negative**: `Gap_F = -0.08537%`. This is not
+the R2/R10 fixed-operator problem and not a bug in the metric; it is a consequence of
+comparing two differently-truncated runs of the same AL method.
+
+- The reference candidate `ALM-full` was stopped by the 900 s guard after 400 inner
+  iterations (t = 1349 s with the R14 outer overrun), objective 19,132,505.42.
+- The tau=0 threshold solve is *also* an uncompressed AL solve, but under the 1800 s
+  `solve-cap` it ran 600 inner iterations (t = 1925 s) and reached a better objective, so
+  its `Gap_F` against the reference is negative.
+
+**Root cause.** On the large networks no candidate converges; every one is truncated by a
+wall-clock cap. "Best feasible point among the candidates" is then only well-defined if the
+candidates are compared at the *same* budget. The reference candidate and the tau=0 solve
+have different budgets (900 s vs 1800 s), so the longer one wins and the sign flips.
+
+**Scope.** This can only affect the tau=0 row, which is itself an uncompressed solve of the
+same kind as the reference. Compressed rows (tau>0) solve a different, smaller problem and
+are not expected to beat a full-length uncompressed reference; they must still be checked.
+
+**Fix options (author decision at analysis time, not mid-run):**
+1. Make the tau=0 threshold solve BE the reference on large networks (it is the
+   best-converged uncompressed solve available), and drop the separate reference candidate
+   there. Cleanest: one uncompressed solve, used both as the tau=0 row and as v^ref.
+2. Give every uncompressed candidate the same budget as the tau=0 solve (raise `ref-cap`
+   to `solve-cap`), so the reference is at least as converged as any uncompressed row.
+3. After the run, post-process: set v^ref to the min objective over ALL uncompressed
+   feasible points produced anywhere in the campaign (reference candidates AND the tau=0
+   row), then recompute every Gap_F. This uses the data already on disk and needs no rerun.
+
+I recommend option 3 for the current overnight data (no recompute cost) and option 1 for
+any future run. The overnight run is NOT interrupted; the raw objectives are all recorded,
+so Gap_F can be recomputed against the true best point without re-solving.
+
+---
+
 ## Gate status
 
 | gate | meaning | status |

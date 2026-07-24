@@ -1,0 +1,10 @@
+[T4A] loading regional (reps=1)
+  paths=4,829,025 od=297,900 links=39,018 load=145.1s
+[T4A] reference: best of ['GP-full', 'ALM-full'] (cap 900s each)
+    [ref cand] GP-full                    obj=19,164,996.493783 cert=3.539e-03 it=135 t=905.9s
+    [ref cand] ALM-full                   obj=19,132,505.419843 cert=nan it=400 t=1349.4s
+    -> reference = ALM-full (obj 19,132,505.419843; spread across candidates 32491.073939 = 0.169821%)
+  f_ref=19,132,505.4198 source=ALM-full cert=nan spread=0.169821%
+[T4A] tau=0.0
+  red=  0.0%  raw= -0.1240%  dF= 0.0563%  GapF= -0.08537%  R2=0.9998  inner=600  pre=0.0s  cpu=1925.3s
+[T4A] tau=0.23
