@@ -64,6 +64,28 @@ count; only the CPU column loses its dispersion, and the `reps` column marks eve
 the reader can see it. **The large networks are run first**, since they set the campaign's
 critical path.
 
+
+
+## C++ solver for large networks (2026-07-24, decisions a-d + user go)
+
+The Python pipeline cannot finish the 4.8M-path networks (R16). The certified C++
+`compressed_solver` is the SAME SPG-ALM signed-SVD algorithm (certify_cpp_r1) and 8-28x
+faster. Panel A large networks now run through `run_table4A_cpp.py`:
+export_stage7 (certified load_problem, instance-consistent) -> compressed_solver hard with
+VDUMP_XRAW -> raw path flows read back -> v3 metrics via the ONE shared module.
+
+**Consistency established (R17), and its one caveat, which goes in the manuscript:**
+- `Gap_F` and `R2` are consistent C++ vs Python (0.31 pp, 1.2e-3) -- properties of the
+  feasible-projected link flows. C++ is used for these accuracy columns unchanged.
+- `delta_F` is NOT (Python 38%, C++ 19% on the same instance): it is the L1 mass the
+  conversion moves, a property of the SOLVER'S terminal iterate, not of the compression.
+  Panel A therefore reports delta_F from C++ for every large-network row (internally
+  consistent), and the text states delta_F is the reported solver's conversion size, not a
+  property of the representation. Small networks (Sioux) keep the Python delta_F.
+
+Reference (decision a): the tau=0 C++ full solve IS v^ref, so the tau=0 row and v^ref are
+the same solution and Gate 2 holds by construction for that row.
+
 ## Evaluation contract (`python/v3_metrics.py`, Gate 0 = `test_v3_metrics.py`)
 
 `x^F = P_X(x~)` per OD over `X = {x >= 0, Ax = d}`; then
