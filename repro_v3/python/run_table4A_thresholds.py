@@ -84,6 +84,9 @@ def main():
                     help="wall-clock cap per reference candidate (decision 2)")
     ap.add_argument("--solve-cap", type=float, default=1800.0,
                     help="wall-clock cap per per-threshold solve")
+    ap.add_argument("--maxiter-inner", type=int, default=None,
+                    help="inner L-BFGS-B iters/outer; default 50 large (decision b), "
+                         "200 certified small")
     ap.add_argument("--out", default=None)
     a = ap.parse_args()
     cfg = NETS[a.net]
@@ -92,6 +95,8 @@ def main():
     # count; only the CPU column loses its dispersion, and that is marked in the CSV.
     if a.reps is None:
         a.reps = 1 if a.net in ("regional", "philadelphia", "sketch") else 3
+    if a.maxiter_inner is None:
+        a.maxiter_inner = 50 if a.net in ("regional", "philadelphia", "sketch") else 200
 
     print(f"[T4A] loading {a.net} (reps={a.reps})", flush=True)
     t0 = time.perf_counter()
@@ -145,14 +150,16 @@ def main():
     for tau in cfg["taus"]:
         print(f"[T4A] tau={tau}", flush=True)
         if tau <= 0.0:
-            # tau = 0 is the uncompressed formulation; time the AL solve on it
             t_pre = 0.0
-            sol, secs = median_solve(
-                lambda: ca.solve_full(P, tol=a.tol, max_outer=40,
-                                      max_seconds=a.solve_cap), a.reps)
-            x_raw = sol["x_raw"]
+            if large and tau0_prepared is not None:
+                x_raw, secs, inner = tau0_prepared      # decision a: reuse the ref solve
+            else:
+                sol, secs = median_solve(
+                    lambda: ca.solve_full(P, tol=a.tol, max_outer=40,
+                                          maxiter_inner=a.maxiter_inner,
+                                          max_seconds=a.solve_cap), a.reps)
+                x_raw = sol["x_raw"]; inner = sol.get("inner_iters", -1)
             s_major, r_used, reduction = n, 0, 0.0
-            inner = sol.get("inner_iters", -1)
             w0free = None
         else:
             tpre = time.perf_counter()
@@ -166,22 +173,27 @@ def main():
             r_used = C["r"]
             reduction = 100.0 * (n - s_major - r_used) / n
             sol, secs = median_solve(
-                lambda: ca.solve_compressed(P, C, regime="hard", tol=a.tol,
-                                            max_outer=30, max_seconds=a.solve_cap), a.reps)
+                lambda: ca.solve_compressed(P, C, regime="hard", tol=a.tol, max_outer=30,
+                                            maxiter_inner=a.maxiter_inner,
+                                            max_seconds=a.solve_cap), a.reps)
             x_raw = sol["x_raw"]
             inner = sol.get("inner_iters", -1)
-            # decision 3: offset-free diagnostic on the SAME solve path
-            Cf = dict(C)
-            Cf["x0m"] = np.zeros_like(C["x0m"])
-            Cf["d_eff"] = P["d"].copy()
-            Cf["v_base"] = P.get("v0", 0.0)
-            try:
-                solf = ca.solve_compressed(P, Cf, regime="hard", tol=a.tol, max_outer=30,
-                                           max_seconds=a.solve_cap)
-                w0free = M.evaluate(P, solf["x_raw"], f_ref, v_ref, "euclid", sl)
-            except Exception as ex:                       # never let the diagnostic break the row
-                print(f"  w0-free diagnostic failed: {ex!r}", flush=True)
-                w0free = None
+            # decision c: the w0-free diagnostic doubles per-threshold cost, so it is
+            # SKIPPED on the large networks (CSV-only diagnostic, decision 3).
+            w0free = None
+            if not large:
+                Cf = dict(C)
+                Cf["x0m"] = np.zeros_like(C["x0m"])
+                Cf["d_eff"] = P["d"].copy()
+                Cf["v_base"] = P.get("v0", 0.0)
+                try:
+                    solf = ca.solve_compressed(P, Cf, regime="hard", tol=a.tol,
+                                               max_outer=30, maxiter_inner=a.maxiter_inner,
+                                               max_seconds=a.solve_cap)
+                    w0free = M.evaluate(P, solf["x_raw"], f_ref, v_ref, "euclid", sl)
+                except Exception as ex:
+                    print(f"  w0-free diagnostic failed: {ex!r}", flush=True)
+                    w0free = None
 
         m = M.evaluate_both(P, x_raw, f_ref, v_ref, sl)
         m.update(dict(net=a.net, tau=tau, n_paths=n, n_od=P["n_od"],
@@ -190,6 +202,7 @@ def main():
                       inner_iters=inner, cpu_s=secs, preprocess_s=t_pre,
                       tol=a.tol, ref_tol=a.ref_tol, ref_cert=g_ref, reps=a.reps,
                       ref_source=ref["source"], ref_operators=ref["operators"],
+                      maxiter_inner=a.maxiter_inner,
                       ref_obj_spread_pct=ref["obj_spread_pct"],
                       ref_n_candidates=ref["n_candidates"]))
         if w0free is not None:

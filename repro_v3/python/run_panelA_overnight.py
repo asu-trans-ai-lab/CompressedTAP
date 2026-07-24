@@ -32,8 +32,9 @@ def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--ref-cap", type=float, default=900.0)
     ap.add_argument("--solve-cap", type=float, default=1800.0)
-    ap.add_argument("--net-ceiling", type=float, default=9000.0,
-                    help="hard wall-clock ceiling per network (s)")
+    ap.add_argument("--net-ceiling", type=float, default=18000.0,
+                    help="hard ceiling per network (s); decision d, 5h for a large net")
+    ap.add_argument("--maxiter-inner", type=int, default=None)
     ap.add_argument("--nets", nargs="*", default=ORDER)
     a = ap.parse_args()
 
@@ -44,6 +45,8 @@ def main():
         cmd = [sys.executable, str(HERE / "run_table4A_thresholds.py"),
                "--net", net, "--ref-cap", str(a.ref_cap),
                "--solve-cap", str(a.solve_cap)]
+        if a.maxiter_inner is not None:
+            cmd += ["--maxiter-inner", str(a.maxiter_inner)]
         t = time.perf_counter()
         with log.open("w") as fh:
             try:
