@@ -23,6 +23,19 @@ Author decisions of 2026-07-19 governing this campaign:
    error source in support-sparse regimes; recording the variant costs nothing on the same
    solve path and preserves the option without adding a benchmark the revnote forbids.
 
+4. **`v^ref` is taken from full-path gradient projection, not from the tau=0 ALM run**
+   (added 2026-07-19 after Gate 2 failed; see `results/GATE2_REFERENCE_FINDING.md`).
+   Measured on Sioux SFK25, the certified ALM default terminates with an optimality
+   certificate of 1.14e-03 and an objective 0.0482% above the optimum, and cannot be
+   driven closer through its exposed tolerances -- `tol` is a *feasibility* tolerance
+   (`||Ax-d|| < tol`) and tightening it 1e-6 -> 1e-12 leaves the certificate unchanged;
+   raising `maxiter_inner` 200 -> 2000 helps once (to 7.53e-04) and then plateaus again.
+   Full-path GP reaches 7.55e-10 in 186 iterations and 2.05 s -- six orders of magnitude
+   tighter and cheaper than ALM. It is still the uncompressed formulation, so the
+   manuscript's wording ("a consistently converged uncompressed formulation as the
+   primary reference") is satisfied. ALM appears in Table 2 as one of the compared
+   operators, evaluated against that reference like the others.
+
 ## Evaluation contract (`python/v3_metrics.py`, Gate 0 = `test_v3_metrics.py`)
 
 `x^F = P_X(x~)` per OD over `X = {x >= 0, Ax = d}`; then

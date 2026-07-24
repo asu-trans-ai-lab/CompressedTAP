@@ -38,6 +38,7 @@ sys.path.insert(0, str(CERT))
 
 import v3_metrics as M                                    # noqa: E402
 import compressed_assignment as ca                        # noqa: E402
+import gp_compressed as GPC                                # noqa: E402
 
 DATA = HERE.parents[3] / "source" / "updated_TAPLite" / "data"
 NETS = {
@@ -153,6 +154,7 @@ def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--net", default="sketch", choices=list(NETS))
     ap.add_argument("--tol", type=float, default=1e-6)
+    ap.add_argument("--ref-tol", type=float, default=1e-9)
     ap.add_argument("--reps", type=int, default=3)
     ap.add_argument("--out", default=None)
     a = ap.parse_args()
@@ -163,13 +165,25 @@ def main():
     sl = M.od_slice_index(P)
     print(f"  paths={P['n']} od={P['n_od']} links={P['B'].shape[1]}", flush=True)
 
-    # ---- reference: consistently converged tau = 0 ALM
-    print(f"[table2] reference: full ALM to tol {a.tol}", flush=True)
-    x_ref_raw, t_ref, it_ref = op_alm_full(P, a.tol)
+    # ---- shared optimality certificate (relative FW duality gap of the converted point)
+    def cert(x_raw):
+        xf = M.convert_euclid(x_raw, P["d"], P["p2od"], sl)
+        v = M.link_flow(P, xf)
+        c = np.asarray(P["B"] @ P["bpr"].t(v)).flatten()
+        sm = _lmo(c, P["d"], sl, P["n"])
+        return float(c @ (xf - sm)) / max(abs(float(c @ xf)), 1e-12)
+
+    # ---- reference: full-path gradient projection converged to ref_tol.
+    # The tau=0 ALM run is NOT used as v^ref: it terminates ~0.048% above the optimum and
+    # cannot be driven closer through its exposed tolerances (results/GATE2_REFERENCE_
+    # FINDING.md), which would bias every Gap_F low and reintroduce negative gaps.
+    print(f"[table2] reference: full-path GP to certificate {a.ref_tol}", flush=True)
+    x_ref_raw, t_ref, it_ref, g_ref = op_gp_full(P, a.ref_tol, max_seconds=1200)
     x_ref = M.convert_euclid(x_ref_raw, P["d"], P["p2od"], sl)
     v_ref = M.link_flow(P, x_ref)
     f_ref = float(P["bpr"].beckmann(v_ref))
-    print(f"  f_ref={f_ref:,.4f}  t={t_ref:.2f}s  inner={it_ref}", flush=True)
+    print(f"  f_ref={f_ref:,.6f}  cert={g_ref:.3e}  t={t_ref:.2f}s  it={it_ref}",
+          flush=True)
 
     rows = []
 
@@ -185,7 +199,12 @@ def main():
               f"GapF={m['Gap_F_pct']:+.6f}%  link={m['link_diff_pct']:.4f}%  "
               f"t={secs:.2f}s", flush=True)
 
-    record("Full (tau=0)", "ALM", x_ref_raw, t_ref, it_ref)
+    record("Full (tau=0)", "Gradient projection [reference]", x_ref_raw, t_ref,
+           it_ref, g_ref)
+
+    print("[table2] full ALM", flush=True)
+    xa_, ta_, ita_ = op_alm_full(P, a.tol)
+    record("Full (tau=0)", "ALM", xa_, ta_, ita_, cert(xa_))
 
     print("[table2] full Frank-Wolfe", flush=True)
     xf_, tf_, itf_, gf_ = op_fw_full(P, a.tol)
@@ -202,8 +221,13 @@ def main():
     print(f"[table2] compressed tau={tau:.6g} (q={cfg['tau_q']}) "
           f"majors={int(major.sum())}/{P['n']} rank={cfg['rank']}", flush=True)
     C = ca.build_compressed(P, major, cfg["rank"])
+    rep_lbl = f"Existing (tau={tau:.4g}, r={cfg['rank']})"
     xc_, tc_, itc_ = op_alm_compressed(P, C, a.tol)
-    record(f"Existing (tau={tau:.4g}, r={cfg['rank']})", "ALM", xc_, tc_, itc_)
+    record(rep_lbl, "ALM", xc_, tc_, itc_, cert(xc_))
+
+    print("[table2] compressed GP-signed (dense constraint penalised)", flush=True)
+    xs_, ts_, its_, gs_ = GPC.solve_gp_signed(P, C, cert, tol=a.tol, max_seconds=600)
+    record(rep_lbl, "GP-signed (penalised)", xs_, ts_, its_, gs_)
 
     out = Path(a.out) if a.out else HERE.parent / "results" / f"table2_consistency_{a.net}.csv"
     out.parent.mkdir(parents=True, exist_ok=True)
