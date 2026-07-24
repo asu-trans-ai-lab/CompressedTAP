@@ -53,6 +53,10 @@ NETS = {
     "philadelphia": dict(dir=ROOT / "OR_paper_revision_V2" / "m4_rerun" / "data"
                          / "philadelphia", pool="pool.csv", multi=True,
                          taus=[0.0, 0.67, 0.99, 5.33], rank=50),
+    # sioux is not a manuscript Panel-A network; included only as a fast validation of the
+    # whole chain (its thresholds are placeholder quantiles, not the submitted grid).
+    "sioux": dict(dir=DATA / "02_Sioux_Falls", pool="path_pool_SFK25.csv", multi=False,
+                  taus=[0.0, 0.46, 1.06, 4.54], rank=50),
 }
 
 
@@ -76,7 +80,10 @@ def main():
     ap.add_argument("--reps", type=int, default=None,
                     help="default: 3 on small instances, 1 on large ones "
                          "(author decision B of 2026-07-19)")
-    ap.add_argument("--ref-max-seconds", type=float, default=3600.0)
+    ap.add_argument("--ref-cap", type=float, default=900.0,
+                    help="wall-clock cap per reference candidate (decision 2)")
+    ap.add_argument("--solve-cap", type=float, default=1800.0,
+                    help="wall-clock cap per per-threshold solve")
     ap.add_argument("--out", default=None)
     a = ap.parse_args()
     cfg = NETS[a.net]
@@ -98,13 +105,25 @@ def main():
     # Each candidate's terminal iterate is converted by the per-OD simplex projection
     # (demand equality and nonnegativity together) before comparison, so the winner is the
     # best FEASIBLE point, not the best raw iterate.
-    print("[T4A] reference: best of all uncompressed operators", flush=True)
+    # Decision 1 (2026-07-19): on large networks the Frank-Wolfe candidate is skipped. It
+    # needs ~1e5 iterations even on Sketch, is catastrophically slow at 4.8M paths, and is
+    # essentially never the best feasible point (ALM or GP always beats it). Skipping it is
+    # an efficiency choice only -- v^ref is still the best point among the uncompressed
+    # operators that ARE run, and which ones ran is recorded per row (ref_operators).
+    # Decision 2 (2026-07-19): every reference candidate gets the SAME wall-clock cap
+    # (--ref-cap), and ALM is capped too via the new max_seconds guard, so no candidate can
+    # hang the campaign. On large networks the reference then converges only to ~1e-3; that
+    # resolution limit is stated in the manuscript (decision A).
+    large = a.net in ("regional", "philadelphia", "sketch")
     ops = {
-        "GP-full":  lambda: op_gp_full(P, a.ref_tol, max_seconds=a.ref_max_seconds),
-        "ALM-full": lambda: op_alm_full(P, a.tol),
-        "FW-full":  lambda: op_fw_full(P, a.ref_tol, max_seconds=a.ref_max_seconds),
+        "GP-full":  lambda: op_gp_full(P, a.ref_tol, max_seconds=a.ref_cap),
+        "ALM-full": lambda: op_alm_full(P, a.tol, max_seconds=a.ref_cap),
     }
+    if not large:
+        ops["FW-full"] = lambda: op_fw_full(P, a.ref_tol, max_seconds=a.ref_cap)
+    print(f"[T4A] reference: best of {list(ops)} (cap {a.ref_cap:.0f}s each)", flush=True)
     ref, ref_cands = REF.build_reference(P, ops, a.tol)
+    ref["operators"] = "+".join(ops)
     x_ref, v_ref, f_ref = ref["x_ref"], ref["v_ref"], ref["f_ref"]
     g_ref, t_ref, it_ref = ref["cert"], ref["seconds"], ref["iterations"]
     print(f"  f_ref={f_ref:,.4f} source={ref['source']} cert={g_ref:.3e} "
@@ -118,7 +137,8 @@ def main():
             # tau = 0 is the uncompressed formulation; time the AL solve on it
             t_pre = 0.0
             sol, secs = median_solve(
-                lambda: ca.solve_full(P, tol=a.tol, max_outer=40), a.reps)
+                lambda: ca.solve_full(P, tol=a.tol, max_outer=40,
+                                      max_seconds=a.solve_cap), a.reps)
             x_raw = sol["x_raw"]
             s_major, r_used, reduction = n, 0, 0.0
             inner = sol.get("inner_iters", -1)
@@ -136,7 +156,7 @@ def main():
             reduction = 100.0 * (n - s_major - r_used) / n
             sol, secs = median_solve(
                 lambda: ca.solve_compressed(P, C, regime="hard", tol=a.tol,
-                                            max_outer=30), a.reps)
+                                            max_outer=30, max_seconds=a.solve_cap), a.reps)
             x_raw = sol["x_raw"]
             inner = sol.get("inner_iters", -1)
             # decision 3: offset-free diagnostic on the SAME solve path
@@ -145,7 +165,8 @@ def main():
             Cf["d_eff"] = P["d"].copy()
             Cf["v_base"] = P.get("v0", 0.0)
             try:
-                solf = ca.solve_compressed(P, Cf, regime="hard", tol=a.tol, max_outer=30)
+                solf = ca.solve_compressed(P, Cf, regime="hard", tol=a.tol, max_outer=30,
+                                           max_seconds=a.solve_cap)
                 w0free = M.evaluate(P, solf["x_raw"], f_ref, v_ref, "euclid", sl)
             except Exception as ex:                       # never let the diagnostic break the row
                 print(f"  w0-free diagnostic failed: {ex!r}", flush=True)
@@ -157,7 +178,7 @@ def main():
                       raw_obj_diff_pct=M.raw_objective_diff_pct(P, x_raw, f_ref),
                       inner_iters=inner, cpu_s=secs, preprocess_s=t_pre,
                       tol=a.tol, ref_tol=a.ref_tol, ref_cert=g_ref, reps=a.reps,
-                      ref_source=ref["source"],
+                      ref_source=ref["source"], ref_operators=ref["operators"],
                       ref_obj_spread_pct=ref["obj_spread_pct"],
                       ref_n_candidates=ref["n_candidates"]))
         if w0free is not None:

@@ -361,6 +361,41 @@ the text should say so.
 
 ---
 
+## R13. Large-network reference is ~1e-3; FW skipped on large nets; wall-clock guards added
+
+Measured on Chicago Regional (**4,829,025 paths, 297,900 OD, 39,018 links**, 148 s to load,
+~4 GB resident): full-path gradient projection reached certificate **1.562e-03** in **277
+iterations over 1805 s** (30-min cap) -- about 6.5 s per iteration, six orders of magnitude
+looser than the 7.13e-08 it reaches on Sioux in 0.2 s. The AL candidate did not converge
+in 49 minutes and had no wall-clock exit.
+
+Three author decisions (2026-07-19) follow, all now in the drivers:
+
+1. **Frank-Wolfe is skipped as a reference candidate on the large networks** (Sketch,
+   Regional, Philadelphia). It needs ~1e5 iterations even on Sketch (56,607 on Sioux to
+   reach 1.6e-06) and is never the best feasible point. This is efficiency only: v^ref
+   remains the best point among the operators that run, and `ref_operators` records which
+   ran on every row.
+2. **Every reference candidate shares one wall-clock cap** (`--ref-cap`, default 900 s),
+   and `solve_full` / `solve_compressed` now take a purely-additive `max_seconds` guard
+   (default None = unchanged) checked at each outer-iteration boundary, so ALM is capped
+   too. Per-threshold solves share `--solve-cap` (default 1800 s). No candidate or solve
+   can hang the campaign.
+3. **Panel A runs unattended, large networks first** (`run_panelA_overnight.py`):
+   regional -> philadelphia -> sketch -> sioux, each in its own subprocess with isolated
+   memory, tee'd to `results/logs/panelA_<net>.log`, with a per-network ceiling.
+
+**Consequence carried into the manuscript (decision A already requires it):** on the large
+networks the reference converges only to ~1e-3, so the `Gap_F` column's resolution is no
+better than that there. A compressed row whose true gap is below the reference's own
+suboptimality is indistinguishable from zero. `ref_cert` and `ref_obj_spread_pct` on every
+row make this visible.
+
+**Validation.** The full chain passed on Sioux (best-of-all reference picks GP over ALM
+and FW, `Gap_F` positive on all four rows, Gate 2 PASS, candidate spread 0.048% recorded).
+
+---
+
 ## Gate status
 
 | gate | meaning | status |

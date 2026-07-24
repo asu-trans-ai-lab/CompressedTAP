@@ -50,10 +50,10 @@ NETS = {
 
 
 # ------------------------------------------------------------------ operators
-def op_alm_full(P, tol, max_outer=40):
+def op_alm_full(P, tol, max_outer=40, max_seconds=None):
     t = time.perf_counter()
-    s = ca.solve_full(P, tol=tol, max_outer=max_outer)
-    return s["x_raw"], time.perf_counter() - t, s.get("inner_iters", -1)
+    s = ca.solve_full(P, tol=tol, max_outer=max_outer, max_seconds=max_seconds)
+    return s["x_raw"], time.perf_counter() - t, s.get("inner_iters", -1), float("nan")
 
 
 class LMOIndex:
@@ -238,7 +238,7 @@ def main():
            it_ref, g_ref)
 
     print("[table2] full ALM", flush=True)
-    xa_, ta_, ita_ = op_alm_full(P, a.tol)
+    xa_, ta_, ita_, _ = op_alm_full(P, a.tol)
     record("Full (tau=0)", "ALM", xa_, ta_, ita_, cert(xa_))
 
     print("[table2] full Frank-Wolfe", flush=True)
