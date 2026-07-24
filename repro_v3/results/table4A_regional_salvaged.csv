@@ -1,0 +1,2 @@
+Gap_F_pct,cpu_s,delta_F_pct,inner_iters,link_R2,net,preprocess_s,raw_obj_diff_pct,reduction_pct,ref_obj,ref_obj_spread_pct,ref_source,reps,salvaged_from,tau
+-0.08537,1925.3,0.0563,600,0.9998,regional,0.0,-0.124,0.0,19132505.419843,0.169821,ALM-full,1,log,0.0

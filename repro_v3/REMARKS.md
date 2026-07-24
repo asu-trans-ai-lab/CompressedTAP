@@ -458,6 +458,45 @@ so Gap_F can be recomputed against the true best point without re-solving.
 
 ---
 
+## R16. The overnight Panel A config is mis-calibrated for 4.8M-path networks
+
+Discovered by running, not estimable in advance. On Chicago Regional (4,829,025 paths)
+each per-threshold cost is far higher than planned, from three compounding effects:
+
+1. **A single ALM/compressed outer iteration is 20-40 min** on this network (maxiter_inner
+   =200 inner L-BFGS-B steps, each a full sparse matvec plus a 1.16M x 50 dense U@z at
+   tau=0.23). The `solve-cap` guard is checked at the OUTER boundary (R14), so it cannot
+   bound the work below one outer -- a 1800 s cap does not stop a 2400 s outer.
+2. **Each compressed threshold runs TWO solves**, the main one and the w0-free diagnostic
+   (decision 3). On small networks the diagnostic is free; on Regional it doubles the
+   per-threshold time to ~60-80 min. tau=0.23 was still running at 54 min for this reason.
+3. **The 150-min net-ceiling is below the ~4-5 h a large network actually needs**
+   (reference phase ~40 min + 4 thresholds x ~60-80 min). Regional is killed before
+   finishing; the tau=0 row and reference are salvaged from the log to
+   `results/table4A_regional_salvaged.csv`.
+
+**Nothing here is a correctness bug** -- the numbers produced are valid, and Gap_F on the
+tau=0 row is negative only because of the truncated-reference issue of R15, fixable by
+recompute. The problem is purely that the run cannot complete the large networks in one
+150-min slot.
+
+**Recalibrated plan (for author approval; not executed autonomously because two options
+touch the certified solver):**
+- (a) On large networks use the tau=0 full solve directly as v^ref (R15 option 1), dropping
+  the separate reference phase -- saves ~40 min/network and removes the R15 sign flip.
+- (b) Lower `maxiter_inner` to ~50 on large networks so each outer is ~4x shorter and the
+  wall-clock guard becomes effective. This departs from the certified default (200) and
+  needs approval.
+- (c) Skip or cheapen the w0-free diagnostic on large networks (it is a CSV-only diagnostic
+  per decision 3; halving the per-threshold cost may be worth losing it on the big nets).
+- (d) Raise the net-ceiling to ~5 h/network and run one large network per night.
+
+Incremental CSV (committed 4f37cd3) already protects philadelphia and sketch: whatever
+thresholds they complete before the ceiling are saved, unlike regional's all-or-nothing
+prior-code run.
+
+---
+
 ## Gate status
 
 | gate | meaning | status |
