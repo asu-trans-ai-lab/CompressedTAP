@@ -497,6 +497,47 @@ prior-code run.
 
 ---
 
+## R17. C++ replaces Python for Gap_F and R2, but delta_F is solver-terminal-dependent
+
+The certified C++ compressed_solver is the same SPG-ALM signed-SVD algorithm and ~8-28x
+faster (R16), which is the only practical way to finish the 4.8M-path networks. Before
+trusting it in a table, `validate_cpp_metrics.py` ran the Python solve on the IDENTICAL
+(P, C) instance (Chicago Sketch, tau=1.06, r=50) and computed all v3 metrics on both
+terminal iterates through the one shared v3_metrics module, against a common GP reference
+(f_ref=16,771,252, cert 8.86e-06).
+
+| metric | Python solve | C++ solve | |Delta| |
+|---|---|---|---|
+| Gap_F | +0.297% | +0.604% | **0.31 pp** |
+| R2 | 0.999188 | 0.998001 | **0.0012** |
+| delta_F | **38.49%** | **19.14%** | **19.36 pp** |
+
+**Gap_F and R2 are consistent** -- both are properties of the feasible-projected link
+flows, which the two solvers reach within 0.3 pp / 1e-3 of each other. C++ can replace
+Python for the substantive accuracy columns without changing what they mean.
+
+**delta_F is NOT consistent, and the reason matters:** delta_F is the L1 mass the
+feasibility conversion moves, i.e. a property of the solver's UNPROJECTED terminal iterate,
+not of the representation. Python's ALM stops with 38% of the mass still infeasible; C++'s
+hard-ALM stops at 19% (a more feasible terminal point). Both are valid; they are different
+numbers because the two solvers terminate at different raw points.
+
+**Consequence.** Switching Panel A to C++ changes the delta_F column. That is acceptable
+only if (a) C++ is used for EVERY row so the column is internally consistent, and (b) the
+manuscript states delta_F is the conversion size for the reported solver, not a property of
+the compression. This actually sharpens R12: delta_F measures how much repair a given
+solver's terminal point needs, which is solver-dependent by definition.
+
+**Incidental, useful:** the GP reference reached cert 8.86e-06 in 600 s on Sketch here,
+far better than the 3.75e-03 seen before the R11 best-iterate fix. The large-network
+reference is therefore in better shape than R13 feared, because R11 made GP return its best
+iterate rather than a nonmonotone-BB wandering endpoint.
+
+**Validator caveat:** its VERDICT only checked Gap_F and R2 (it passed); delta_F was
+outside the pass condition and must be read from the table above, not from the verdict.
+
+---
+
 ## Gate status
 
 | gate | meaning | status |
