@@ -98,8 +98,9 @@ def convert_euclid(x: np.ndarray, d: np.ndarray, p2od: np.ndarray,
     # cancellation can cost significant digits. Verify the result actually lands on the
     # demand constraint and fall back to the per-block routine if it does not. The check
     # is O(n) and, on every instance tested so far, never fires.
-    got = np.zeros(n_od)
-    np.add.at(got, p2od, xf)
+    # bincount, not np.add.at: the latter is an unbuffered ufunc and costs ~0.5 s per
+    # call on a 700k-path pool, which is more than a whole solver iteration.
+    got = np.bincount(p2od, weights=xf, minlength=n_od)
     scale = np.maximum(np.abs(d), 1.0)
     if np.max(np.abs(got - d) / scale) > 1e-9:
         xf = np.empty_like(x)

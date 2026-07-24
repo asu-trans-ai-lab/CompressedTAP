@@ -162,7 +162,7 @@ def op_gp_full(P, tol, max_iter=200000, max_seconds=600.0):
             if not (1e-14 < step < 1e14):
                 step = 1.0
         xp, gp = x, c
-        x = M.convert_euclid(x - step * c, d, p2od, sl)
+        x = M.convert_euclid(x - step * c, d, p2od)
     return x, time.perf_counter() - t, it, gap_rel
 
 

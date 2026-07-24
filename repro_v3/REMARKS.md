@@ -256,12 +256,59 @@ running Regional should confirm it still does not.
 
 ---
 
+## R10. The reference problem is scale-dependent: no fixed operator works at both sizes
+
+**This supersedes the fix recorded in R2, which is correct on small instances only.**
+
+R2 replaced the tau=0 ALM reference with full-path gradient projection, because on Sioux
+Falls ALM terminated 0.048% above the optimum. Running the same driver on Chicago Sketch
+(**709,567 paths, 82,083 OD pairs, 2,950 links**) inverts the result:
+
+| instance | GP reference | ALM | verdict |
+|---|---|---|---|
+| Sioux SFK25 (6,464 paths) | cert **7.55e-10**, 186 it, 1.07 s | cert 1.14e-03, `Gap_F` **+0.048187%** | ALM is the bad reference |
+| Chicago Sketch (709,567 paths) | cert **3.75e-03**, 920 it, **1200.9 s (hit cap)** | 758.7 s, `Gap_F` **-0.028254%** | **GP is the bad reference** |
+
+On Sketch the gradient-projection reference does not converge inside twenty minutes, and
+ALM finds a better feasible point — so `Gap_F` goes negative again and Gate 2 fails, for
+the opposite reason to Sioux. Six orders of magnitude of certificate quality separate the
+same operator on the two instances (7.55e-10 vs 3.75e-03).
+
+**Conclusion.** Reference quality is a property of the instance, not of the operator.
+Fixing any single solver as `v^ref` will fail somewhere in a three-network study.
+
+**Proposed remedy (author decision pending).** Define `v^ref` as *the best feasible point
+found by any uncompressed operator under the common protocol*, and record its provenance
+and certificate as columns in every CSV. This (i) makes `Gap_F >= 0` hold by construction
+rather than by luck, which is the property the v3 revision exists to establish;
+(ii) satisfies the manuscript's wording, which asks for "a consistently converged
+uncompressed formulation" without naming a solver; (iii) costs nothing, since those
+solutions are computed for the table anyway; and (iv) stays auditable.
+
+**The cost that must be stated, not hidden.** On large instances the best available
+reference is only converged to ~1e-3, so **the resolution of the `Gap_F` column is no
+better than that** on those networks. Any compressed row whose true gap is smaller than
+the reference's own suboptimality cannot be distinguished from zero. This limitation
+belongs in the manuscript, not just in this file.
+
+**Measured cost, for budgeting (not an estimate).** On Chicago Sketch: one ALM solve
+758.7 s; the GP reference still at 3.75e-03 after 1200 s. Extrapolating the observed
+1.3 s/iteration, reaching 1e-8 would take roughly 3.6 hours on this network alone.
+Chicago Regional has 4.8M pool rows, about 6.8x Sketch.
+
+**A driver gap this exposed.** `op_gp_full` and `op_fw_full` take `max_seconds`;
+`ca.solve_full` and `ca.solve_compressed` do not. ALM therefore cannot be time-capped in
+Panel A, where it runs 4 thresholds x 3 repetitions x 3 networks. Needs a wall-clock
+guard before that campaign starts.
+
+---
+
 ## Gate status
 
 | gate | meaning | status |
 |---|---|---|
 | 0 | metric module correct (7 checks) | PASS |
 | 1 | reference self-evaluates to `Gap_F = 0`, `R^2 = 1` | PASS (Sioux) |
-| 2 | no negative `Gap_F` anywhere | **PASS** (Sioux, GP reference; all six rows positive) |
+| 2 | no negative `Gap_F` anywhere | **PASS** on Sioux; **FAILS on Chicago Sketch** (ALM -0.028%, the GP reference being the under-converged one there) -- see R10 |
 | 3 | reported identities consistent (`K/q` vs `n`, `s+r`) | not yet reached |
 | 4 | every rendered LaTeX row traces to a CSV row | not yet reached |
