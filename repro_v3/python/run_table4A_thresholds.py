@@ -8,8 +8,14 @@ Per author decision 2, EVERY column is produced fresh -- reduction, raw objectiv
 difference, delta_F, Gap_F, link R^2, outer/inner iterations and CPU. No submitted timing
 is carried over, so no row mixes two campaigns.
 
-Per author decision 4, v^ref is the full-path gradient-projection solution converged to
-`--ref-tol`, not the tau=0 ALM run (REMARKS.md R2).
+Per author decision A, v^ref is the BEST FEASIBLE POINT found by any uncompressed
+operator: each candidate's terminal iterate is converted by the per-OD simplex projection
+(demand equality and nonnegativity together) and the lowest feasible objective wins. No
+fixed operator is safe at both scales (REMARKS.md R2, R10). `ref_source`, `ref_cert` and
+`ref_obj_spread_pct` are written to every row.
+
+Per author decision B, timings repeat 3x on small instances and once on the large ones;
+Gap_F, delta_F and R^2 are deterministic and unaffected.
 
 Per author decision 3, the offset-free variant (w0 = 0) is evaluated on the same solve
 path and written to `w0free_*` diagnostic columns. It does not enter the manuscript.
@@ -33,7 +39,9 @@ sys.path.insert(0, str(ROOT / "source" / "updated_TAPLite" / "python"))
 
 import v3_metrics as M                                    # noqa: E402
 import compressed_assignment as ca                        # noqa: E402
-from run_table2_consistency import LMOIndex, op_gp_full   # noqa: E402
+import v3_reference as REF                              # noqa: E402
+from run_table2_consistency import (LMOIndex, op_gp_full, op_fw_full,   # noqa: E402
+                                    op_alm_full)
 
 DATA = ROOT / "source" / "updated_TAPLite" / "data"
 NETS = {
@@ -65,13 +73,20 @@ def main():
     ap.add_argument("--net", required=True, choices=list(NETS))
     ap.add_argument("--tol", type=float, default=1e-6)
     ap.add_argument("--ref-tol", type=float, default=1e-7)
-    ap.add_argument("--reps", type=int, default=3)
+    ap.add_argument("--reps", type=int, default=None,
+                    help="default: 3 on small instances, 1 on large ones "
+                         "(author decision B of 2026-07-19)")
     ap.add_argument("--ref-max-seconds", type=float, default=3600.0)
     ap.add_argument("--out", default=None)
     a = ap.parse_args()
     cfg = NETS[a.net]
+    # Author decision B (2026-07-19): repeat timings 3x on small instances, once on the
+    # large ones. Gap_F, delta_F and R^2 are deterministic and unaffected by the repeat
+    # count; only the CPU column loses its dispersion, and that is marked in the CSV.
+    if a.reps is None:
+        a.reps = 1 if a.net in ("regional", "philadelphia", "sketch") else 3
 
-    print(f"[T4A] loading {a.net}", flush=True)
+    print(f"[T4A] loading {a.net} (reps={a.reps})", flush=True)
     t0 = time.perf_counter()
     P = ca.load_problem(str(cfg["dir"]), cfg["pool"], multi_path_only=cfg["multi"])
     load_s = time.perf_counter() - t0
@@ -79,14 +94,21 @@ def main():
     print(f"  paths={P['n']:,} od={P['n_od']:,} links={P['B'].shape[1]:,} "
           f"load={load_s:.1f}s", flush=True)
 
-    # ---- reference (decision 4)
-    print(f"[T4A] reference: full-path GP to {a.ref_tol}", flush=True)
-    x_ref_raw, t_ref, it_ref, g_ref = op_gp_full(P, a.ref_tol,
-                                                 max_seconds=a.ref_max_seconds)
-    x_ref = M.convert_euclid(x_ref_raw, P["d"], P["p2od"])
-    v_ref = M.link_flow(P, x_ref)
-    f_ref = float(P["bpr"].beckmann(v_ref))
-    print(f"  f_ref={f_ref:,.4f} cert={g_ref:.3e} it={it_ref} t={t_ref:.1f}s", flush=True)
+    # ---- reference: best feasible point from ANY uncompressed operator (decision A).
+    # Each candidate's terminal iterate is converted by the per-OD simplex projection
+    # (demand equality and nonnegativity together) before comparison, so the winner is the
+    # best FEASIBLE point, not the best raw iterate.
+    print("[T4A] reference: best of all uncompressed operators", flush=True)
+    ops = {
+        "GP-full":  lambda: op_gp_full(P, a.ref_tol, max_seconds=a.ref_max_seconds),
+        "ALM-full": lambda: op_alm_full(P, a.tol),
+        "FW-full":  lambda: op_fw_full(P, a.ref_tol, max_seconds=a.ref_max_seconds),
+    }
+    ref, ref_cands = REF.build_reference(P, ops, a.tol)
+    x_ref, v_ref, f_ref = ref["x_ref"], ref["v_ref"], ref["f_ref"]
+    g_ref, t_ref, it_ref = ref["cert"], ref["seconds"], ref["iterations"]
+    print(f"  f_ref={f_ref:,.4f} source={ref['source']} cert={g_ref:.3e} "
+          f"spread={ref['obj_spread_pct']:.6f}%", flush=True)
 
     rows = []
     n = P["n"]
@@ -134,7 +156,10 @@ def main():
                       majors=s_major, rank=r_used, reduction_pct=reduction,
                       raw_obj_diff_pct=M.raw_objective_diff_pct(P, x_raw, f_ref),
                       inner_iters=inner, cpu_s=secs, preprocess_s=t_pre,
-                      tol=a.tol, ref_tol=a.ref_tol, ref_cert=g_ref, reps=a.reps))
+                      tol=a.tol, ref_tol=a.ref_tol, ref_cert=g_ref, reps=a.reps,
+                      ref_source=ref["source"],
+                      ref_obj_spread_pct=ref["obj_spread_pct"],
+                      ref_n_candidates=ref["n_candidates"]))
         if w0free is not None:
             m["w0free_Gap_F_pct"] = w0free["Gap_F_pct"]
             m["w0free_delta_F_pct"] = w0free["delta_F_pct"]
