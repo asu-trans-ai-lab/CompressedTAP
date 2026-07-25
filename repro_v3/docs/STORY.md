@@ -4,6 +4,22 @@
 richness K/OD; fixed τ=4.54, r=50, tol=1e-4, single thread. All numbers below trace to
 `repro_v3/results/{kod_axis_alm,highk_fixes,sketch_operators,kod_axis_cpp}.csv`.)*
 
+## 0. HEADLINE SPEEDUPS
+
+| case | **SPEEDUP** | accuracy |
+|---|---|---|
+| Grid N32 K64, C++ hard **r=10** | **8.6x** | +0.08% |
+| Grid N16 K32, C++ hard r=20 | **7.3x** | 0.0000% |
+| Grid N16 K64, C++ hard r=20 | **6.8x** | 0.0000% |
+| **Sioux Falls (real network), C++** | **6.2x** | certified (tau,r) gap |
+| Grid K=32-64 column (N24/N32), C++ | **3.1-5.2x** | <= 0.55% |
+| Sioux Falls, Python | **3.6x** | +3.4% |
+| Chicago Sketch sweet spot, Python | **2.0x** | +0.02% |
+
+Compression accelerates **ALM only** (GP 0.00-0.10x, RG 0.07-0.55x compressed -- see 5d/5e).
+Conditions for the win: w0 anchor, small rank (r~10-20), high reduction, long paths
+(nnz/path >= ~2r). Rows 1-5 are same-engine C++ ratios (baseline caveat in 5f).
+
 ## 1. The central curve (Python, signed-SVD ALM-hard vs full ALM)
 
 | pool | K/OD | reduction | speedup | accuracy gap |
@@ -211,3 +227,53 @@ Section 1's mechanism and Table 5's insensitivity.
    implementation (compiled) question, stated as future work.
 5. All speedup claims are within-campaign ratios at matched tolerance, single thread, with
    the strongest applicable full-space baseline named (FW at working tolerance).
+
+## 7. Partial closure (2026-07-25) — the headline numbers first
+
+**THE NUMBERS THAT HEADLINE (largest certified speedup ratios, within-engine, same
+tolerance, same instance):**
+
+| # | case | **SPEEDUP** | accuracy |
+|---|---|---|---|
+| 1 | Grid N32 K64, C++ hard **r=10** | **8.6x** | +0.08% |
+| 2 | Grid N16 K64, C++ hard r=20 | **6.8x** | 0.0000% |
+| 3 | Sioux Falls, C++ hard | **6.2x** | matches certified (tau,r) gap |
+| 4 | Grid N16 K32 (verify rerun), C++ r=20 | **7.3x** | 0.0000% |
+| 5 | Grid N24/N32 K=32-64 column, C++ | **3.1-5.2x** | <= 0.55% |
+| 6 | Sioux Falls, Python hard | **3.6x** | +3.4% (= certified Table 2 value) |
+| 7 | Sketch sweet spot (K-bar 3.5, 70% red), Python | **2.0x** | +0.02% |
+
+Caveat that travels with rows 1-5: the C++ full baseline under-converges on grids
+(STORY 5f); rows are same-engine, same-stopping-rule ratios. Rows 6-7 are
+strong-baseline Python numbers.
+
+**Per-operator closure:**
+
+- **ALM — CLOSED, positive.** Compression is an ALM accelerator (the numbers above), and
+  only an ALM accelerator. Four measured conditions for the win: w0 anchor present; small
+  rank (r ~ 10-20: 8.6x at r=10 vs 1.5x at r=40); high variable reduction; paths long
+  relative to rank (nnz/path >= ~2r). Deferred: matched-quality cross-engine grid number
+  (blocked on the C++ eta-gate stopping rule -- author decision).
+- **GP — CLOSED, negative on the signed basis, by geometry.** GP lives off the separable
+  per-OD projection; the signed compressed set destroys separability (DNS at real ell;
+  0.00-0.10x where feasible). No tuning recovers it. GP-full stays as the reference
+  operator (best objective everywhere; fastest full method on the grid).
+- **RG — CLOSED, diagnosis points at the representation.** Anchor substitution removed the
+  equality but the dense minor box was the real bottleneck (0.07-0.55x). The grouped
+  box-bound RG was essentially exact (once beating full-space): RG's future is the
+  grouped/atom representation.
+
+**Three transferable laws (the round's yield):**
+1. Variable reduction helps only methods whose per-iteration bottleneck is in the
+   variables; compression densifies constraints (5e).
+2. A signed subspace of nonnegative flows needs an interior anchor; w0 is load-bearing —
+   for accuracy at scale in both engines, for speed in the compiled solver (5c, W0 doc).
+3. Speedup is a property of (representation x operator x engine x instance geometry) —
+   report within-engine, matched tolerance, named baseline; never as "compression" alone.
+
+**Move on to:** Paper 1 ships ALM + signed-SVD + w0 with the four conditions and the
+headline table above; Paper 2 inherits both structural fixes (anchor internalized,
+separability restored) via atoms — where GP- and RG-type methods re-enter. Deferred
+engineering: C++ full-mode stopping rule; Regional-scale rerun.
+
+
