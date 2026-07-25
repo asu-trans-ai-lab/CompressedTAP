@@ -276,4 +276,48 @@ headline table above; Paper 2 inherits both structural fixes (anchor internalize
 separability restored) via atoms — where GP- and RG-type methods re-enter. Deferred
 engineering: C++ full-mode stopping rule; Regional-scale rerun.
 
+## 8. Beyond the base problem: why ALM is the right frame for constrained and multi-layer cases
 
+*(Outlook. NOT measured in this campaign -- stated as the structural argument the measured
+results support, and as the next experiment set.)*
+
+The problem solved here carries only OD conservation and nonnegativity. Deployed assignment
+problems routinely add side structure:
+
+- **Link / corridor capacity constraints** -- v = B'x <= kappa (physical capacity, managed
+  lanes, environmental or emissions caps on a subnetwork).
+- **Knapsack / budget rows** -- total tolling revenue, investment budget, total VMT or
+  emissions: a few dense rows coupling every path.
+- **Assignment-side resource capacity** -- parking, transit seat/vehicle capacity, charging
+  stations: capacities on resources shared across many OD pairs.
+- **Coupling to a control layer** -- signal green splits and offsets enter the delay
+  function, so assignment and control are solved jointly (or bilevel) with consistency
+  constraints tying the two layers.
+
+**Why these favour ALM.** Each item above is, for an augmented Lagrangian, one more
+multiplier block and one more penalty term: the algorithm is unchanged, the per-iteration
+cost grows by the size of the added constraint set, and multipliers warm-start naturally
+across scenarios (which is precisely the repeated-assignment use case the paper targets).
+The solver already carries several constraint regimes (hard / soft / screen) for the minor
+nonnegativity block, which is the same machinery applied to a different constraint family.
+
+**Why they disqualify projection-type operators.** GP and RG earn their speed from a
+projection that must stay closed-form and separable. A link-capacity row couples paths
+*across* OD pairs; a knapsack row is dense over all paths; a control-layer coupling can make
+the feasible set non-polyhedral or the problem bilevel. In every case the projection degrades
+into a general QP -- the same failure mode measured in 5d/5e, now for a second, independent
+reason. This is the strongest argument for the ALM framing: it is not only faster under
+compression, it is the only one of the four operators that *extends*.
+
+**How compression interacts (the honest part, from the 5e law).** Compression shrinks the
+variable side; side constraints grow the constraint side. Two regimes follow:
+- Constraints sized by the **network** (m links, a handful of budget rows) do not grow with
+  the candidate pool. Compression's benefit survives and even strengthens as pools get
+  richer, because the constraint work is fixed while the uncompressed variable work grows.
+- Constraints sized by the **paths** (per-path limits) hit exactly the dense-block problem
+  of the minor box and would erode the benefit, per the same law.
+
+**Next experiment set (proposed, not run):** capacity-constrained ALM on the grid at
+K = 32-64 with r = 10-20 -- the home-regime cells -- measuring (i) speedup versus the
+unconstrained baseline, (ii) how many capacity rows can be added before the constraint side
+dominates, and (iii) whether GP/RG degrade further, as predicted.
