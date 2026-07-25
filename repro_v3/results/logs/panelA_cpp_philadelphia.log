@@ -5,3 +5,5 @@
 [T4A-cpp] tau=0.0
   red=  0.0%  dF= 0.0000%  GapF= +0.00000%  R2=1.0000  cpu=170.4s
 [T4A-cpp] tau=0.67
+  red= 33.8%  dF= 0.0000%  GapF= -0.18772%  R2=0.9993  cpu=4316.7s
+[T4A-cpp] tau=0.99

@@ -1,0 +1,28 @@
+
+[K-axis] V2: loading pool.csv
+  n=42,774 ell=17,464 K-bar=2.45 majors=19,997 r=50 red=53.1% svd=0.2s
+  FULL t=    12.2s obj=16,761,371.28
+  HARD t=    12.6s SPEEDUP= 0.98x objgap=+0.0287% (full-vs-best +0.0000%)
+
+[K-axis] E0: loading path_pool_E0_baseline.csv
+  n=229,175 ell=65,728 K-bar=3.49 majors=67,966 r=50 red=70.3% svd=1.9s
+  FULL t=   129.3s obj=16,771,399.80
+  HARD t=    66.4s SPEEDUP= 1.95x objgap=+0.0228% (full-vs-best +0.0000%)
+
+[K-axis] E2: loading path_pool.csv
+  n=709,567 ell=82,083 K-bar=8.64 majors=91,277 r=50 red=87.1% svd=9.0s
+  FULL t=   486.4s obj=16,776,096.99
+  HARD t=   732.7s SPEEDUP= 0.66x objgap=+0.5877% (full-vs-best +0.0000%)
+
+[K-axis] K10: loading path_pool_K10.csv
+  n=903,516 ell=81,435 K-bar=11.09 majors=91,760 r=50 red=89.8% svd=13.4s
+  FULL t=   645.0s obj=16,778,944.82
+  HARD t=   968.5s SPEEDUP= 0.67x objgap=+1.1156% (full-vs-best +0.0000%)
+
+[K-axis] K15: loading path_pool_K15.csv
+  n=1,323,999 ell=86,304 K-bar=15.34 majors=100,165 r=50 red=92.4% svd=18.2s
+  FULL t=   908.2s obj=16,794,251.42
+  HARD t=  1355.5s SPEEDUP= 0.67x objgap=+1.8580% (full-vs-best +0.0000%)
+
+[K-axis] K20: loading path_pool_K20.csv
+  n=1,323,999 ell=86,304 K-bar=15.34 majors=100,165 r=50 red=92.4% svd=18.1s

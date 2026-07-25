@@ -1,0 +1,7 @@
+op,space,time_s,speedup_vs_full,obj_feasible,gap_vs_best_pct,cert_relgap,note,source
+ALM,full,21.6,,16761371.28,0.006253757710210148,0.0004393,,log
+GP,full,21.09,,16760323.13,0.0,9.118e-05,it=408,log
+FW,full,1.43,,16760457.82,0.0008036241243964517,9.942e-05,it=169,log
+ALM,compressed,23.2,0.93,16766096.28,0.034445338286258384,0.001621,,log
+GP-signed,compressed,nan,,nan,,nan,"DNS: dense ell x ell projection (ell=17,464); >25 CPU-min, 0 certified iters",log
+RG-anchor,compressed,38.14,0.55,16829201.61781072,0.4109615744068169,0.008637938995304737,anchors_active=308,live

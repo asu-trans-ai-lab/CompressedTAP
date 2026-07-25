@@ -1,0 +1,20 @@
+
+[fix] E2: baseline full t=486.4s obj=16,776,096.99
+  hard r= 10: t=  413.1s SPEEDUP= 1.18x gap=+0.6183% (svd 3.6s)
+  hard r= 25: t=  539.9s SPEEDUP= 0.90x gap=+0.6838% (svd 4.8s)
+  grouped m0=3 r0=1: t= 1439.2s SPEEDUP= 0.34x gap=+0.0156% n_red=215,237 (build 151.5s)
+
+[fix] K10: baseline full t=645.0s obj=16,778,944.82
+  hard r= 10: t= 7392.7s SPEEDUP= 0.09x gap=+1.1699% (svd 4.4s)
+  hard r= 25: t=  656.4s SPEEDUP= 0.98x gap=+1.1692% (svd 6.7s)
+  grouped m0=3 r0=1: t= 1199.8s SPEEDUP= 0.54x gap=+0.0000% n_red=215,427 (build 222.6s)
+
+[fix] SUMMARY:
+  E2   svd_r10        SPEEDUP= 1.18x gap=+0.6183%
+  E2   svd_r25        SPEEDUP= 0.90x gap=+0.6838%
+  E2   grouped_m3r1   SPEEDUP= 0.34x gap=+0.0156%
+  K10  svd_r10        SPEEDUP= 0.09x gap=+1.1699%
+  K10  svd_r25        SPEEDUP= 0.98x gap=+1.1692%
+  K10  grouped_m3r1   SPEEDUP= 0.54x gap=+0.0000%
+wrote C:\source_codes\0_source_code_new\compressed_optimization\git_dev\CompressedTAP\repro_v3\results\highk_fixes.csv
+[fix] DONE

@@ -1,0 +1,37 @@
+
+[grid] N=8: 224 links, 64 ODs, q=90.0
+  K=  4: n=   297 Kbar= 4.64 red= 60.6% full=   0.2s hard=   0.1s SPEEDUP= 1.06x gap=+0.0000%
+  K=  8: n=   528 Kbar= 8.25 red= 66.3% full=   0.1s hard=   0.1s SPEEDUP= 0.97x gap=+0.0000%
+  K= 16: n=   964 Kbar=15.06 red= 71.6% full=   0.3s hard=   0.2s SPEEDUP= 1.63x gap=+0.0000%
+  K= 32: n= 1,814 Kbar=28.34 red= 73.6% full=   0.6s hard=   0.5s SPEEDUP= 1.34x gap=+0.0000%
+  K= 64: n= 3,527 Kbar=55.11 red= 74.5% full=   1.3s hard=   0.7s SPEEDUP= 1.85x gap=+0.0000%
+
+[grid] N=16: 960 links, 256 ODs, q=45.0
+  K=  4: n= 1,275 Kbar= 4.98 red= 65.0% full=   0.5s hard=   0.3s SPEEDUP= 1.59x gap=+1.3839%
+  K=  8: n= 2,254 Kbar= 8.80 red= 69.1% full=   0.9s hard=   0.8s SPEEDUP= 1.21x gap=+0.3336%
+  K= 16: n= 4,224 Kbar=16.50 red= 72.9% full=   1.2s hard=   0.9s SPEEDUP= 1.36x gap=+0.2767%
+  K= 32: n= 8,175 Kbar=31.93 red= 74.1% full=   4.6s hard=   1.3s SPEEDUP= 3.46x gap=+0.0000%
+  K= 64: n=16,202 Kbar=63.29 red= 74.6% full=   9.4s hard=   1.4s SPEEDUP= 6.84x gap=+0.0000%
+
+[grid] N=24: 2208 links, 576 ODs, q=30.0
+  K=  4: n= 2,878 Kbar= 5.00 red= 68.7% full=   1.9s hard=   1.0s SPEEDUP= 1.93x gap=+2.3438%
+  K=  8: n= 5,151 Kbar= 3.47 red= 88.4% full=   2.2s hard=   2.4s SPEEDUP= 0.94x gap=+1.5768%
+  K= 16: n= 9,595 Kbar= 2.07 red= 93.8% full=   2.7s hard=   1.7s SPEEDUP= 1.57x gap=+0.5369%
+  K= 32: n=18,710 Kbar=32.48 red= 74.2% full=   8.3s hard=   2.5s SPEEDUP= 3.31x gap=+0.1806%
+  K= 64: n=37,013 Kbar= 1.75 red= 98.4% full=  28.1s hard=   5.5s SPEEDUP= 5.14x gap=+0.0000%
+
+[grid] N=32: 3968 links, 1024 ODs, q=22.5
+  K=  4: n= 5,120 Kbar= 3.14 red= 79.6% full=   2.9s hard=   1.0s SPEEDUP= 3.02x gap=+3.8371%
+  K=  8: n= 9,198 Kbar= 8.98 red= 71.3% full=   4.3s hard=   2.0s SPEEDUP= 2.17x gap=+2.3832%
+  K= 16: n=17,233 Kbar=16.83 red= 72.5% full=   9.6s hard=   8.7s SPEEDUP= 1.09x gap=+1.5446%
+  K= 32: n=33,551 Kbar= 8.45 red= 96.9% full=  14.4s hard=   5.1s SPEEDUP= 2.82x gap=+28.7545%
+  K= 64: n=45,670 Kbar=64.61 red= 98.4% full=  15.4s hard=  16.9s SPEEDUP= 0.91x gap=+149.6857%
+
+[grid] SPEEDUP(N, K) matrix:
+        K=4      K=8      K=16     K=32     K=64     
+  N=8   1.06     0.97     1.63     1.34     1.85     
+  N=16  1.59     1.21     1.36     3.46     6.84     
+  N=24  2.07     0.86     1.56     3.31     5.14     
+  N=32  3.02     2.17     1.03     3.19     0.91     
+wrote C:\source_codes\0_source_code_new\compressed_optimization\git_dev\CompressedTAP\repro_v3\results\grid_axis_cpp.csv
+[grid] DONE

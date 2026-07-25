@@ -1,0 +1,34 @@
+
+[cpp-axis] V2: exporting
+  n=42,774 K-bar=2.45 red=53.1%
+  FULL t=   41.1s obj=16,771,218.39 inner=2610
+  HARD t=  121.2s SPEEDUP= 0.34x gap=+0.0000% inner=3917
+
+[cpp-axis] E0: exporting
+  n=229,175 K-bar=3.49 red=70.3%
+  FULL t=   49.7s obj=16,775,122.88 inner=798
+  HARD t=   63.4s SPEEDUP= 0.78x gap=+0.0019% inner=621
+
+[cpp-axis] E2: exporting
+  n=709,567 K-bar=8.64 red=87.1%
+  FULL t=  151.5s obj=16,928,107.95 inner=1167
+  HARD t=  187.7s SPEEDUP= 0.81x gap=+0.0000% inner=782
+
+[cpp-axis] K10: exporting
+  n=903,516 K-bar=11.09 red=89.8%
+  FULL t=  197.6s obj=16,972,896.71 inner=1257
+  HARD t=  264.2s SPEEDUP= 0.75x gap=+0.1218% inner=1024
+
+[cpp-axis] K15: exporting
+  n=1,323,999 K-bar=15.34 red=92.4%
+  FULL t=  402.0s obj=17,062,700.77 inner=2245
+  HARD t=  406.0s SPEEDUP= 0.99x gap=+0.1959% inner=1556
+
+[cpp-axis] C++ CENTRAL CURVE:
+  V2   K-bar=  2.45 red= 53.1% SPEEDUP= 0.34x gap=+0.0000%
+  E0   K-bar=  3.49 red= 70.3% SPEEDUP= 0.78x gap=+0.0019%
+  E2   K-bar=  8.64 red= 87.1% SPEEDUP= 0.81x gap=+0.0000%
+  K10  K-bar= 11.09 red= 89.8% SPEEDUP= 0.75x gap=+0.1218%
+  K15  K-bar= 15.34 red= 92.4% SPEEDUP= 0.99x gap=+0.1959%
+wrote C:\source_codes\0_source_code_new\compressed_optimization\git_dev\CompressedTAP\repro_v3\results\kod_axis_cpp.csv
+[cpp-axis] DONE

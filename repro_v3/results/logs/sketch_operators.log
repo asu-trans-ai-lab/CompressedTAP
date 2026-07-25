@@ -1,0 +1,8 @@
+[ops] loading sketch (V2 pool)
+  n=42,774 od=17,464 tau=4.54 majors=19,997 r=50 (53.1% reduction)
+[ops] full space
+  ALM        [full      ] t=   21.60s obj=16,761,371.28 cert=4.393e-04 
+  GP         [full      ] t=   21.09s obj=16,760,323.13 cert=9.118e-05 it=408 gap=9.1e-05
+  FW         [full      ] t=    1.43s obj=16,760,457.82 cert=9.942e-05 it=169 gap=9.9e-05
+[ops] compressed (tau=4.54, r=50)
+  ALM        [compressed] t=   23.20s obj=16,766,096.28 cert=1.621e-03 
