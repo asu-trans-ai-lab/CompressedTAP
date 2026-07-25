@@ -1,0 +1,21 @@
+
+[N16K32] n=8,175 tau=2.098
+  C++ full: t=   6.7s obj=256,765.69
+  C++ hard r=10: t=   1.3s SPEEDUP= 5.24x gap=+0.0935%
+  C++ hard r=20: t=   0.9s SPEEDUP= 7.34x gap=+0.0000%
+  C++ hard r=40: t=   1.2s SPEEDUP= 5.44x gap=+0.0000%
+  PY  full: t=   3.7s obj=244,814.94
+  PY  hard r=20: t=   4.4s SPEEDUP= 0.84x gap=+4.5749%
+  PY  w0free r=20: t=   3.3s SPEEDUP= 1.15x gap=+4.2807%
+
+[N32K64] n=66,161 tau=0.527
+  C++ full: t= 103.0s obj=1,050,687.72
+  C++ hard r=10: t=  11.9s SPEEDUP= 8.62x gap=+0.0766%
+  C++ hard r=20: t=  15.9s SPEEDUP= 6.46x gap=+0.3660%
+  C++ hard r=40: t=  69.1s SPEEDUP= 1.49x gap=+0.3279%
+  PY  full: t=  73.0s obj=1,004,470.35
+  PY  hard r=20: t=  44.3s SPEEDUP= 1.65x gap=+5.0460%
+  PY  w0free r=20: t=  33.0s SPEEDUP= 2.21x gap=+9.2005%
+
+wrote C:\source_codes\0_source_code_new\compressed_optimization\git_dev\CompressedTAP\repro_v3\results\grid_verify.csv
+[verify] DONE

@@ -174,6 +174,27 @@ reduced-gradient-type methods recover their cheap iterations. Two roads, one pri
 signed-SVD + w0 pairs with ALM (Paper 1); atoms internalize both the anchor and the
 separability, opening compression to the whole operator family (Paper 2).
 
+## 5f. Verification suite (2026-07-25, grid_verify.csv): what holds across engines and ranks
+
+Two home-regime cells (N16K32, N32K64): C++ full + hard at r in {10,20,40}; Python full,
+hard, and w0-free at the same instance/tau/tol.
+
+**Verified:** rank law in C++ -- speedup peaks at small rank (N32K64: 8.62x at r=10, 6.46x
+at r=20, 1.49x at r=40) with quality flat (gaps <= 0.37%); dense cost linear in r, matching
+Section 1's mechanism and Table 5's insensitivity.
+
+**NOT verified -- two caveats now attached to earlier sections:**
+1. *Grid ALM speedup at matched solution quality.* The C++ FULL solver under-converges on
+   grids: its objective is 4.6-4.9% ABOVE the Python full objective while also being slower
+   (eta-gate weakness, the R20 pattern). The C++ 6-8x therefore compares two equally
+   under-converged solves; Python (strong full, weak compressed) gets 0.84-1.65x. Neither
+   engine alone yet demonstrates the grid speedup at matched quality. Fixing the C++
+   full-mode stopping rule (author decision) is the path to a clean matched-quality number.
+2. *The w0 SPEED claim is C++-specific.* In Python, w0-free is somewhat faster; the
+   accuracy damage replicates at scale only. Correct statement: w0 is load-bearing for
+   accuracy at scale in both engines, and for speed in the compiled solver
+   (W0_LOAD_BEARING.md section 8).
+
 ## 6. What the paper should say (headline speedups)
 
 1. Compression delivers **~2× at its sweet spot** (moderate richness, ~70% reduction) with

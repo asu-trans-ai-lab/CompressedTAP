@@ -99,3 +99,13 @@ approach of Paper 2:
     # ablation on the cached exports (writes grid_w0free_cpp.csv)
     python run_grid_w0free.py
     # Sioux: make_w0free() on the tau600 export, then compressed_solver_o3sse hard, 3 reps
+
+## 8. Cross-engine caveat (verification suite, grid_verify.csv, 2026-07-25)
+
+The Python replication is MIXED: in Python the w0-free variant is somewhat FASTER
+(1.15x vs 0.84x at N16K32; 2.21x vs 1.65x at N32K64) while the accuracy damage replicates
+only at scale (+9.2% vs +5.0% at N32K64; roughly equal at N16K32). The speed half of the
+load-bearing claim is therefore C++-specific (its dense-hinge/line-search cost structure);
+the accuracy half holds at scale in both engines, and the Sioux C++ speed collapse
+(6.2x -> 1.34x) stands. State the claim as: "w0 is load-bearing for accuracy at scale in
+both engines, and for speed in the compiled solver."
