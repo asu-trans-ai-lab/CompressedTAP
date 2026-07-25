@@ -1,0 +1,29 @@
+
+=== V2 (tau=4.54) ===
+  PY  full           t=   16.3s obj=16,761,371.28
+  PY  hard r= 10      t=   15.2s SPEEDUP= 1.07x gap=+0.0293%
+  PY  hard r= 20      t=   13.9s SPEEDUP= 1.17x gap=+0.0312%
+  PY  hard r= 50      t=   25.9s SPEEDUP= 0.63x gap=+0.0283%
+  C++ full           t=   52.0s obj=16,771,218.39
+  C++ hard r= 10      t=   70.4s SPEEDUP= 0.74x gap=+0.0026%
+  C++ hard r= 20      t=   81.6s SPEEDUP= 0.64x gap=+0.0011%
+  C++ hard r= 50      t=  256.0s SPEEDUP= 0.20x gap=+0.0000%
+
+=== E0 (tau=4.54) ===
+  PY  full           t=  205.0s obj=16,771,399.80
+  PY  hard r= 10      t=   50.7s SPEEDUP= 4.04x gap=+0.0236%
+  PY  hard r= 20      t=   42.3s SPEEDUP= 4.84x gap=+0.0234%
+  PY  hard r= 50      t=  105.3s SPEEDUP= 1.95x gap=+0.0221%
+  C++ full           t=   55.9s obj=16,775,122.88
+  C++ hard r= 10      t=   37.4s SPEEDUP= 1.50x gap=+0.0019%
+  C++ hard r= 20      t=   40.9s SPEEDUP= 1.37x gap=+0.0020%
+  C++ hard r= 50      t=   69.6s SPEEDUP= 0.80x gap=+0.0020%
+
+[rank-test] SUMMARY (speedup by rank):
+  pool  engine  r=10      r=20      r=50      
+  V2    py      1.07      1.17      0.63      
+  V2    cpp     0.74      0.64      0.20      
+  E0    py      4.04      4.84      1.95      
+  E0    cpp     1.50      1.37      0.80      
+wrote C:\source_codes\0_source_code_new\compressed_optimization\git_dev\CompressedTAP\repro_v3\results\sketch_rank_test.csv
+[rank-test] DONE

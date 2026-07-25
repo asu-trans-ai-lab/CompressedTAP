@@ -13,8 +13,8 @@ richness K/OD; fixed τ=4.54, r=50, tol=1e-4, single thread. All numbers below t
 | Grid N16 K64, C++ hard r=20 | **6.8x** | 0.0000% |
 | **Sioux Falls (real network), C++** | **6.2x** | certified (tau,r) gap |
 | Grid K=32-64 column (N24/N32), C++ | **3.1-5.2x** | <= 0.55% |
+| **Chicago Sketch sweet spot (E0), Python r=20** | **4.8x** | +0.02% |
 | Sioux Falls, Python | **3.6x** | +3.4% |
-| Chicago Sketch sweet spot, Python | **2.0x** | +0.02% |
 
 Compression accelerates **ALM only** (GP 0.00-0.10x, RG 0.07-0.55x compressed -- see 5d/5e).
 Conditions for the win: w0 anchor, small rank (r~10-20), high reduction, long paths
@@ -210,6 +210,32 @@ Section 1's mechanism and Table 5's insensitivity.
    accuracy damage replicates at scale only. Correct statement: w0 is load-bearing for
    accuracy at scale in both engines, and for speed in the compiled solver
    (W0_LOAD_BEARING.md section 8).
+
+## 5g. Rank correction on Sketch (2026-07-25): the axis was run at the wrong rank
+
+The whole Sketch campaign used r=50, i.e. 2r=100 dense flops per minor row against only
+~15 nnz per path -- the wrong side of the 5b crossover. Retesting the two best pools at
+r in {10,20,50}, fresh same-session baselines, both engines (sketch_rank_test.csv):
+
+| pool | engine | r=50 | r=20 | r=10 |
+|---|---|---|---|---|
+| E0 (K-bar 3.49) | Python | 1.95x | **4.84x** | 4.04x |
+| E0 | C++ | 0.80x | 1.37x | **1.50x** |
+| V2 (K-bar 2.45) | Python | 0.63x | **1.17x** | 1.07x |
+| V2 | C++ | 0.20x | 0.64x | **0.74x** |
+
+- **The Sketch sweet-spot speedup is 4.84x, not 1.95x** -- and the accuracy is unchanged
+  (gaps 0.0221% / 0.0234% / 0.0236% across r=50/20/10; flat, as Table 5's rank-insensitivity
+  predicted). A 2.5x improvement for free.
+- C++ E0 crosses 1.0 for the first time on a real network (0.80x -> 1.50x).
+- Both engines agree on the DIRECTION (smaller rank is better here) though not the
+  magnitude -- the usual engine dependence, now with matched conclusions.
+- **Correction to earlier sections:** "Sketch is the away game" was partly an artifact of
+  r=50. The mechanism law of 5b is confirmed and its practical form sharpened: choose
+  2r <~ nnz-per-path. The peak is interior (r=20 beats both 10 and 50 in Python).
+- **Consequence for the manuscript:** Panel B's Sketch axis and any r=50 Sketch speedup
+  should be re-reported at r=20, or the rank must be named as a tuned parameter. Not yet
+  propagated to main.tex.
 
 ## 6. What the paper should say (headline speedups)
 
