@@ -1,0 +1,22 @@
+
+[K-axis] E2: loading path_pool.csv
+  n=709,567 ell=82,083 K-bar=8.64 majors=91,277 r=20 red=87.1% svd=4.6s
+  FULL t=   625.3s obj=16,776,096.99
+  HARD t=   625.5s SPEEDUP= 1.00x objgap=+0.7244% (full-vs-best +0.0000%)
+
+[K-axis] K10: loading path_pool_K10.csv
+  n=903,516 ell=81,435 K-bar=11.09 majors=91,760 r=20 red=89.8% svd=5.7s
+  FULL t=   689.1s obj=16,778,944.82
+  HARD t=   930.2s SPEEDUP= 0.74x objgap=+1.1762% (full-vs-best +0.0000%)
+
+[K-axis] K15: loading path_pool_K15.csv
+  n=1,323,999 ell=86,304 K-bar=15.34 majors=100,165 r=20 red=92.4% svd=12.5s
+  FULL t=  1312.3s obj=16,794,251.42
+  HARD t=  1228.0s SPEEDUP= 1.07x objgap=+1.8775% (full-vs-best +0.0000%)
+
+[K-axis] CENTRAL CURVE (speedup vs K/OD):
+  E2   K-bar=  8.64 red= 87.1% speedup= 1.00x gap=+0.7244%
+  K10  K-bar= 11.09 red= 89.8% speedup= 0.74x gap=+1.1762%
+  K15  K-bar= 15.34 red= 92.4% speedup= 1.07x gap=+1.8775%
+wrote C:\source_codes\0_source_code_new\compressed_optimization\git_dev\CompressedTAP\repro_v3\results\kod_axis_alm_r20.csv
+[K-axis] DONE
