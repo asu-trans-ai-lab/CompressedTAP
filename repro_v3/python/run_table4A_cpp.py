@@ -46,10 +46,15 @@ import compressed_assignment as ca
 
 DATA = ROOT / "source" / "updated_TAPLite" / "data"
 NETS = {
-    "sketch": dict(dir=DATA / "03_chicago_sketch", pool="path_pool.csv", multi=1,
-                   taus=[0.0, 0.46, 1.06, 4.54]),
-    "regional": dict(dir=DATA / "04_chicago_regional", pool="path_pool.csv", multi=1,
-                     taus=[0.0, 0.23, 0.46, 1.03]),
+    # Sketch: the SUBMITTED instance is the V2 pool (n=42,774, ell=17,464, K=2.45), NOT the
+    # rich source pool (n=709,567). Reproduces the submitted reductions 29.5/41.3/53.1%.
+    "sketch": dict(dir=ROOT / "OR_paper_revision_V2" / "m4_rerun" / "data" / "sketch",
+                   pool="pool.csv", multi=1, taus=[0.0, 0.46, 1.06, 4.54]),
+    # Regional: submitted 879k pool is not on disk; author decision 2026-07-24 = re-run on the
+    # E0 baseline pool (n=2,024,525) and UPDATE all regional columns + Table 3 to this instance.
+    # Submitted tau values kept (the controlled parameter); resulting reductions are re-reported.
+    "regional": dict(dir=DATA / "04_chicago_regional", pool="path_pool_E0_baseline.csv",
+                     multi=1, taus=[0.0, 0.23, 0.46, 1.03]),
     "philadelphia": dict(dir=ROOT / "OR_paper_revision_V2" / "m4_rerun" / "data"
                          / "philadelphia", pool="pool.csv", multi=1,
                          taus=[0.0, 0.67, 0.99, 5.33]),

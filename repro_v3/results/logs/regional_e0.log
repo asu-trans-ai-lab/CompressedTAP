@@ -1,0 +1,11 @@
+[T4A-cpp] loading regional for metrics
+  n=2,024,525 od=270,598 links=39,018
+[T4A-cpp] reference = C++ tau=0 full solve
+  f_ref=18,854,545.6834 t=785.3s inner=902
+[T4A-cpp] tau=0.0
+  red=  0.0%  dF= 0.0001%  GapF= +0.00000%  R2=1.0000  cpu=785.3s
+[T4A-cpp] tau=0.23
+  red= 62.3%  dF= 0.0011%  GapF= +0.04286%  R2=0.9938  cpu=5378.4s
+[T4A-cpp] tau=0.46
+  red= 77.0%  dF= 0.0011%  GapF= +0.73297%  R2=0.9869  cpu=6078.6s
+[T4A-cpp] tau=1.03

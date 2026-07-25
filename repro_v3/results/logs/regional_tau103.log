@@ -1,0 +1,6 @@
+[tau1.03] loading regional (E0) for metrics
+  n=2,024,525 od=270,598
+  f_ref(tau0)=18,854,545.6834
+[tau1.03] solving cached export  n_minor=1,699,608 reduction=83.9%
+  red= 83.9%  dF=0.0007%  GapF=+1.27553%  R2=0.9742  cpu=5628.9s
+[tau1.03] appended -> C:\source_codes\0_source_code_new\compressed_optimization\git_dev\CompressedTAP\repro_v3\results\table4A_regional_cpp.csv

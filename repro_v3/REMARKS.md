@@ -569,6 +569,27 @@ reductions after the run completes.
 
 ---
 
+## R19. Small negative Gap_F on philadelphia is within the reference resolution
+
+Philadelphia tau=0.67: red 33.8% (matches submitted 33.7%, unlike regional's shifted
+reductions -- R18 is regional-specific), delta_F 0.0000% (nearly feasible terminal, vs
+regional's 89.7% -- the w0-offset infeasibility is regime-dependent), and
+**Gap_F = -0.18772%** (negative). The compressed solve beat the tau=0 reference.
+
+recompute_gapf CANNOT fix this: the reference IS the tau=0 full solve, and it is the
+looser one here (ref-outer=15). Per decision A the large-network reference is converged
+only to ~1e-2, so a |Gap_F| below that magnitude means the compressed solve is
+indistinguishable from the reference at the available resolution -- NOT that compression
+beats the full model. Report Gap_F as measured, with the stated reference-resolution
+caveat; do not read -0.19% as a real improvement. Tightening would require more reference
+outers (accepted cost/quality trade already fixed at 15 by decision d).
+
+Also: philadelphia's timing is contaminated by two machine sleeps (cpu_s=4316 s for
+tau=0.67 includes idle wall-clock); the deterministic columns are unaffected. Timing rows
+touched by sleep must be re-timed on a quiet machine before the CPU column is final.
+
+---
+
 ## Gate status
 
 | gate | meaning | status |

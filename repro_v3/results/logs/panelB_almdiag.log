@@ -1,0 +1,12 @@
+[T4B] penalty-KSP on Sketch (n_od cap 400, kmax 64)
+  penalty-KSP: scanned 407 ODs, kept 400 with >= 64 paths
+[T4B] K=8: n=3,200 ell=400 s=2325 r=50 s+r=2375 q=5.94 K/q=1.35
+  ALM 1.6/4.3s x0.36  GP nan/nans xnan  gap +0.0000%
+[T4B] K=16: n=6,400 ell=400 s=3535 r=50 s+r=3585 q=8.96 K/q=1.79
+  ALM 3.6/7.6s x0.47  GP nan/nans xnan  gap +0.0000%
+[T4B] K=32: n=12,800 ell=400 s=4556 r=50 s+r=4606 q=11.52 K/q=2.78
+  ALM 7.1/13.2s x0.54  GP nan/nans xnan  gap +0.0000%
+[T4B] K=64: n=25,600 ell=400 s=4818 r=50 s+r=4868 q=12.17 K/q=5.26
+  ALM 24.3/32.4s x0.75  GP nan/nans xnan  gap +0.0000%
+
+[T4B] DONE -> C:\source_codes\0_source_code_new\compressed_optimization\git_dev\CompressedTAP\repro_v3\results\table4B_richness.csv
