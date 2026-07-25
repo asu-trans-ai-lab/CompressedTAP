@@ -145,6 +145,35 @@ Six home-regime cells (N in {16,32} x K in {16,32,64}), same w0 representation, 
 - **Paper consequence: the ALM framing is not a preference, it is the measured pairing** --
   compression + ALM works; compression + projection methods does not.
 
+## 5e. The constraints-vs-variables law (why "fewer variables" is not enough)
+
+Every iteration costs (gradient work over the VARIABLES) + (feasibility work over the
+CONSTRAINTS). Compression shrinks the first term for every method (n -> s+r); it does not
+shrink the second — it densifies it (the n-s reconstruction rows persist, and the subspace
+couples them). The operator table of 5d is this law in action:
+
+- **ALM is constraint-tolerant**: feasibility lives in the objective via multipliers and a
+  penalty, so its iteration cost is gradient-dominated — variable reduction is passed
+  straight through to wall-clock. Compression + ALM wins.
+- **GP is constraint-brittle**: its full-space engine is the separable, closed-form per-OD
+  simplex projection (essentially free). The compressed feasible set
+  {A1 y + M z = d_eff, y >= 0, w0 + U z >= 0} is not separable — z enters every OD equality
+  through M and every minor bound through dense U — so the projection becomes a coupled QP
+  (Dykstra + an ell x ell factorization per iteration) that costs more than the variable
+  reduction saves.
+- **RG eliminates constraints by substitution** and lives off the resulting plain box
+  bounds. On the signed basis, the eliminated structure returns as the dense
+  w0 + U z >= 0 hinge over all minors, O(n_minor x r) per evaluation: what substitution
+  removed, the representation re-added.
+
+**Law: variable reduction accelerates a method only if its per-iteration bottleneck is in
+the variables, not in the constraints.** The constructive consequence is the same bridge as
+5c: a grouped/bundle (atom) representation — x_p = s * d_p, s >= 0 — makes the compressed
+feasible set separable AGAIN (plain box, closed-form projection), so projection- and
+reduced-gradient-type methods recover their cheap iterations. Two roads, one principle:
+signed-SVD + w0 pairs with ALM (Paper 1); atoms internalize both the anchor and the
+separability, opening compression to the whole operator family (Paper 2).
+
 ## 6. What the paper should say (headline speedups)
 
 1. Compression delivers **~2× at its sweet spot** (moderate richness, ~70% reduction) with
