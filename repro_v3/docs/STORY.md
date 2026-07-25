@@ -118,6 +118,33 @@ demand w0 used to pre-load must be fought back through the feasibility constrain
 **Verdict: keep w0 — it is the mechanism, not an add-on.** (Closes the author's long-open
 "speedup ratio related to w0" question; per decision 3 the variant stays a CSV diagnostic.)
 
+## 5d. Operator x compression on the grid (2026-07-25): the benefit is ALM-specific
+
+Six home-regime cells (N in {16,32} x K in {16,32,64}), same w0 representation, Python
+(the one engine with all four operators), within-family speedups (grid_operators.csv):
+
+| cell | ALM | GP-signed | RG-anchor | FW-full baseline |
+|---|---|---|---|---|
+| N16K16 | 1.11x | 0.00x | 0.07x | 5.0 s |
+| N16K64 | 1.96x | 0.01x | 0.13x | 17.4 s |
+| N32K16 | 3.85x | 0.02x | 0.34x | 31.6 s |
+| N32K64 | 2.54x | 0.10x | 0.26x | 61.1 s |
+
+- **Only ALM benefits from compression.** Structural reason: ALM's inner subproblem needs
+  only gradients in (y,z), so the subspace shrinks its work directly. GP and RG live off the
+  cheap separable per-OD projection of the full space; compression destroys that
+  separability (equality couples y and z through Mz, the box through dense U), so their
+  compressed projections cost more than what they replaced. GP-signed caps out everywhere;
+  RG-anchor runs 2-8x slower than ALM-hard at the same terminal accuracy.
+- On the grid, GP-full is the strongest full-space method (best objective, cert 1e-4,
+  0.6-30 s); FW loses its Sketch advantage here.
+- Honesty caveat: the Python compressed rows terminate at cert ~5e-2 vs ~1e-4 for the full
+  rows, so this table's cross-space ALM ratios (1.1-3.9x) mix speed with looseness; the
+  matched-accuracy ALM speedup is the C++ matrix of Section 5b (up to 6.8x, gaps <= 0.55%).
+  The clean claim from THIS table is the operator ranking under compression.
+- **Paper consequence: the ALM framing is not a preference, it is the measured pairing** --
+  compression + ALM works; compression + projection methods does not.
+
 ## 6. What the paper should say (headline speedups)
 
 1. Compression delivers **~2× at its sweet spot** (moderate richness, ~70% reduction) with
