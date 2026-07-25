@@ -52,9 +52,12 @@ def main():
     ap.add_argument("--tol", type=float, default=1e-4)
     ap.add_argument("--max-outer-full", type=int, default=40)
     ap.add_argument("--max-outer-comp", type=int, default=30)
+    ap.add_argument("--rank", type=int, default=RANK)
+    ap.add_argument("--out", default=None)
     a = ap.parse_args()
+    rank_use = a.rank
 
-    out = HERE.parent / "results" / "kod_axis_alm.csv"
+    out = (HERE.parent / "results" / (a.out or "kod_axis_alm.csv"))
     rows = []
 
     def flush():
@@ -69,7 +72,7 @@ def main():
         ell, n = P["n_od"], P["n"]
         kbar = n / ell
         major = ca.split_major_minor(P, tau=TAU)
-        C = ca.build_compressed(P, major, RANK)
+        C = ca.build_compressed(P, major, rank_use)
         s = int(major.sum())
         red = 100 * (n - s - C["r"]) / n
         print(f"  n={n:,} ell={ell:,} K-bar={kbar:.2f} majors={s:,} r={C['r']} "
