@@ -47,9 +47,11 @@ This work was carried out at the Fulton School of Engineering, Arizona State Uni
   \texttt{CompressedTAP@\doccommit} (\texttt{version\_3}) \textbullet\ numerical section
   rewritten; flow-weighted basis; paired-comparison figures; body in black, red = notes to co-authors}
 
-% Author-facing notes (red). Remove this block and the \conote calls before submission.
-\newcommand{\conote}[1]{{\color{red}\small\textsf{[Note to co-authors: #1]}}}
-\newcommand{\conoteY}[1]{{\color{red}\small\textsf{[Note to Yuchao: #1]}}}
+% Author-facing notes (red). \shownotesfalse suppresses them for a submission build;
+% the calls can then stay in the source.
+\newif\ifshownotes \shownotestrue
+\newcommand{\conote}[1]{\ifshownotes{\color{red}\small\textsf{[Note to co-authors: #1]}}\fi}
+\newcommand{\conoteY}[1]{\ifshownotes{\color{red}\small\textsf{[Note to Yuchao: #1]}}\fi}
 
 \begin{document}
 \maketitle
