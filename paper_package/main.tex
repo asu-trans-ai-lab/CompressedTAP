@@ -40,7 +40,7 @@ This work was carried out at the Fulton School of Engineering, Arizona State Uni
 \date{April 2026}
 
 % ---- draft version stamp (bump DOCVER on every circulated build) ----
-\newcommand{\docver}{v3.3}
+\newcommand{\docver}{v3.5}
 \newcommand{\docdate}{2026-07-25}
 \newcommand{\doccommit}{0077beb}
 \newcommand{\docstamp}{Draft \docver\ \textbullet\ built \docdate\ \textbullet\ code
@@ -900,19 +900,28 @@ by which instance it is; the displacement isolates the choice under study.
 \begin{figure}[h]
 \centering
 \includegraphics[width=\textwidth]{fig/fig_paired.pdf}
-\caption{Paired comparisons. Each arrow is one instance solved twice with a single change:
-(a) plain to flow-weighted subspace, (b) affine offset present to removed. The horizontal axis
-is exact; the vertical axis carries the measurement noise of Section~\ref{sec:setup}, drawn as
-the error bar, so vertical displacements shorter than it are not effects.}
+\caption{Paired comparisons. Each arrow is one instance solved twice with a single change,
+running from the plain object to the one advocated here: (a) plain to flow-weighted subspace,
+(b) no offset to offset present. Open markers are the baseline. The horizontal axis is exact;
+the vertical axis carries the measurement noise of Section~\ref{sec:setup}, drawn as the error
+bar, so vertical displacements shorter than it are not effects.}
 \label{fig:paired}
 \end{figure}
 
-Two readings follow, and the noise floor decides which is which. Horizontally, the arrows in
-panel~(a) point left in $27$ of $34$ pairs: the weighted subspace is an accuracy improvement,
-and it is measured exactly. Vertically they scatter, and only $2$ of $34$ exceed the noise
-floor, so the apparent speed gains are not resolvable and we do not claim them. Panel~(b) is
-the offset ablation on the weighted representation, and the gap rises in $16$ of $20$ grid
-cells, confirming that removing the anchor loses accuracy whichever subspace is used.
+Comparing the two panels separates the two mechanisms cleanly, and the noise floor is what
+makes the separation legible. In panel~(a) the arrows point left in $27$ of $34$ pairs, so the
+weighted subspace improves accuracy, and that is measured exactly; vertically they scatter, and
+only $2$ of $34$ rise by more than the noise floor, so we claim no speed effect for the
+weighting. Panel~(b) behaves differently. Adding the offset improves the gap in $16$ of $20$
+grid cells \emph{and} improves the solution time by more than the noise floor in $10$ of $20$.
+
+The offset is therefore a speed mechanism as well as an accuracy one, whereas the subspace
+criterion is an accuracy mechanism only. This is what one would expect from
+Sections~\ref{sec:weighted-basis} and \ref{sec:offset-study}: weighting rotates the retained
+subspace, changing what the representation can express but not how hard the subproblem is,
+while the offset moves the starting point into the interior of the feasible set and so changes
+the difficulty of the subproblem directly. The two act on different parts of the representation
+and neither substitutes for the other.
 
 Figure~\ref{fig:3d} shows the same two comparisons over the full grid design, on the axis that
 can be resolved. The weighted sheet lies below the plain one and the offset-free sheet lies

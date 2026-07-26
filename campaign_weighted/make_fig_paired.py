@@ -66,16 +66,20 @@ for fam, c in col.items():
 axA.set_title("(a) plain $\\rightarrow$ flow-weighted subspace", fontsize=10)
 
 # ---------------------------------------------------------------- (b) offset
+# Baseline is the representation WITHOUT the offset; the arrow shows what adding w0 buys,
+# so both panels read the same way: from the plain object to the one we advocate.
 for r in grid:
     if r["basis"] != "weighted":
         continue
-    arrow(axB, float(r["gap_pct"]), float(r["speedup"]),
-          float(r["gap_nooffset_pct"]), float(r["speedup_nooffset"]), "0.35")
-    axB.plot([max(float(r["gap_nooffset_pct"]), FL)], [float(r["speedup_nooffset"])],
-             marker="o", ms=3.5, mfc="none", mec="0.25", zorder=3)
-axB.plot([], [], color="0.35", marker="o", ms=4, mfc="none", lw=1.1,
-         label="grid, $w_0$ removed")
-axB.set_title("(b) $w_0$ present $\\rightarrow$ $w_0$ removed (weighted basis)", fontsize=10)
+    x0, y0 = float(r["gap_nooffset_pct"]), float(r["speedup_nooffset"])
+    x1, y1 = float(r["gap_pct"]), float(r["speedup"])
+    axB.plot([max(x0, FL)], [y0], marker="o", ms=3.5, mfc="none", mec="0.45", zorder=3)
+    arrow(axB, x0, y0, x1, y1, "tab:purple")
+    axB.plot([max(x1, FL)], [y1], marker="o", ms=3.5, color="tab:purple", zorder=3)
+axB.plot([], [], color="0.45", marker="o", ms=4, mfc="none", lw=0,
+         label="baseline: no offset ($w_0=0$)")
+axB.plot([], [], color="tab:purple", marker="o", ms=4, lw=1.1, label="with $w_0$")
+axB.set_title("(b) adding the offset: $w_0=0 \\rightarrow w_0$ (weighted basis)", fontsize=10)
 
 for ax in (axA, axB):
     ax.axhline(1.0, color="0.4", ls="--", lw=1.0)
@@ -93,10 +97,11 @@ fig.tight_layout(); fig.savefig(OUT, bbox_inches="tight")
 
 adv = sum(1 for _, x0, y0, x1, y1 in pairs if y1 > y0 * NOISE)
 bet = sum(1 for _, x0, y0, x1, y1 in pairs if x1 < x0)
-print(f"basis pairs: {len(pairs)}; gap improved in {bet}; "
-      f"speed improved beyond the noise floor in {adv}")
-dom = sum(1 for r in grid if r["basis"] == "weighted"
-          and float(r["gap_nooffset_pct"]) > float(r["gap_pct"])
-          and float(r["speedup_nooffset"]) < float(r["speedup"]))
-print(f"offset pairs: 20; dominated on BOTH axes when w0 removed: {dom}")
+print(f"(a) basis pairs: {len(pairs)}; gap improves in {bet}; "
+      f"speed improves beyond the noise floor in {adv}")
+gw = [r for r in grid if r["basis"] == "weighted"]
+bet_b = sum(1 for r in gw if float(r["gap_pct"]) < float(r["gap_nooffset_pct"]))
+adv_b = sum(1 for r in gw if float(r["speedup"]) > float(r["speedup_nooffset"]) * NOISE)
+print(f"(b) offset pairs: {len(gw)}; adding w0 improves the gap in {bet_b}; "
+      f"improves speed beyond the noise floor in {adv_b}")
 print("wrote", OUT)
