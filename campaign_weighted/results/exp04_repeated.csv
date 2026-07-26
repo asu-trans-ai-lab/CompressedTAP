@@ -1,0 +1,9 @@
+break_even_H,delta,gap_compressed_pct,gap_warmfull_pct,kind,linkerr_compressed_pct,linkerr_warmfull_pct,saving_per_solve_s,scenario,t_cold_s,t_compressed_mean_s,t_compressed_s,t_nominal_s,t_prep_s,t_svd_s,t_warmfull_mean_s,t_warmfull_s
+,0.0,,,-,,,,baseline,,,,65.22,,0.76,,
+,0.05,0.0,0.0053,demand,5.6248,3.1841,,demand5,52.7,,12.6,,,,,32.77
+,0.1,0.0,0.0083,demand,6.321,2.5783,,demand10,71.77,,14.55,,,,,54.28
+,0.2,0.0,0.0095,demand,6.2355,2.151,,demand20,65.55,,11.46,,,,,37.66
+,0.05,0.0,0.0115,capacity,5.2487,2.0998,,capacity5,61.64,,13.39,,,,,54.16
+,0.1,0.0,0.0207,capacity,5.0464,2.0583,,capacity10,67.1,,14.2,,,,,57.79
+,0.2,0.0,0.0381,capacity,4.2408,1.2095,,capacity20,67.2,,18.55,,,,,63.7
+2,,,,,,,35.94,SUMMARY,,14.12,,,65.98,,50.06,
