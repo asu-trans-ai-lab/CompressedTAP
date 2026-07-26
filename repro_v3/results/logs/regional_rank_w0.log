@@ -1,0 +1,4 @@
+[regional] exporting tau=0 (full baseline)
+  n=2,024,525 od=270,598 nnz/path=30.0 -> rule says 2r <~ 30, i.e. r <~ 15
+  FULL t=987.5s obj=18,854,545.32 inner=902
+[regional] r=10: majors=324,917 red=84.0% svd=11.2s
