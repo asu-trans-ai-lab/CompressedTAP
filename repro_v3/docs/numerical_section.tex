@@ -39,13 +39,13 @@ This work was carried out at the Fulton School of Engineering, Arizona State Uni
 \author{Xuesong Zhou, Peiheng Li, Yuchao Li, and Dimitri Bertsekas}
 \date{April 2026}
 
+\graphicspath{{./}}
 \begin{document}
 {\Large\bfseries Compressed Traffic Assignment --- Numerical Section (rewritten)}\par
 \vspace{2pt}
-{\small Standalone extract of the rewritten computational study. Repro code
-\texttt{CompressedTAP@version\_3}; every number traces to a CSV in \texttt{repro\_v3/results}.
-Red marks material that differs from the submitted version. Cross-references to appendices
-outside this extract appear as \texttt{??}.}
+{\small Standalone extract. Every number traces to a CSV in \texttt{repro\_v3/results}
+(\texttt{CompressedTAP}, branch \texttt{version\_3}). Red marks material that differs from the
+submitted version.}
 \vspace{8pt}\hrule\vspace{8pt}
 \section{Computational Studies}
 \label{sec:experiments}
@@ -152,7 +152,8 @@ $N=32$ & 1.76 & 2.76 & 0.96 & 3.13 & 5.02\\
 \end{tabular}}
 \end{table}
 
-The prediction holds. Reading across any row, the speedup rises with pool depth, reaching
+The prediction holds (Figure~
+ef{fig:speedup-mechanisms}a). Reading across any row, the speedup rises with pool depth, reaching
 $6.82\times$ at $N=16$, $K=64$ with a feasible objective gap of $0.0000\%$; the $K=32$ and
 $K=64$ columns are uniformly between $3.1\times$ and $6.8\times$ with gaps at most $0.55\%$.
 Reading down the columns, the effect strengthens with grid size once the pool is deep enough,
@@ -161,6 +162,20 @@ $K=8$--$16$ interior is noisy because those cells solve in under ten seconds. Th
 column carries $1.4$--$3.4\%$ gaps: with only four candidate paths per OD pair, a fixed
 $75$th-percentile threshold classifies genuinely used paths as minor.
 }
+
+
+\begin{figure}[h]
+\centering
+\includegraphics[width=\textwidth]{fig/fig_speedup_mechanisms.pdf}
+\caption{{\color{red}The two mechanisms that govern the compression speedup. (a) On the grid
+family, the gain grows with the depth of the candidate pool at every grid size, because the
+uncompressed problem grows with the pool while the compressed dimension does not; the dashed
+line marks parity. (b) On Sioux Falls the rank moves the speedup by close to an order of
+magnitude in both implementations while the feasible objective gap, annotated at each point,
+is unchanged to four decimal places --- over this range the rank is a speed parameter, not an
+accuracy parameter.}}
+\label{fig:speedup-mechanisms}
+\end{figure}
 
 \subsection{The Rank is a Speed Parameter}
 \label{sec:rank}
@@ -195,7 +210,8 @@ C\texttt{++} & 10 & 0.97 & \textbf{8.45} & 0.4541\\
 \end{table}
 
 The speedup varies by nearly an order of magnitude while the feasible objective gap moves in
-the fourth decimal place. Over this range the rank is therefore almost purely a speed
+the fourth decimal place (Figure~
+ef{fig:speedup-mechanisms}b). Over this range the rank is therefore almost purely a speed
 parameter: it multiplies the dense reconstruction without moving the solution. The optimum is
 interior rather than at $r\to0$, because too small a subspace eventually lengthens the inner
 solves --- visible on the grid, where $N=16$, $K=32$ gives $5.24\times$, $7.34\times$ and
@@ -399,8 +415,8 @@ Applying the rank rule to the submitted threshold grid improves accuracy as well
 $r=20$ the conversion $\delta_F$ vanishes at every threshold, the feasible objective gaps are
 $0.027\%$, $0.000\%$, $0.020\%$ and $0.028\%$ for $\tau=0$, $0.46$, $1.06$ and $4.54$, and
 the link-flow $R^2$ rises to between $0.9997$ and $1.0000$, compared with $0.990$--$0.996$ at
-$r=50$. The full threshold sweeps are reported in Appendix~\ref{app:full-results}, and the
-per-iteration overhead analysis in Appendix~\ref{app:gradient-overhead}.
+$r=50$. The distribution of demand between major and minor paths at each threshold is
+reported in Appendix~\ref{app:pathflow}.
 }
 
 \subsection{Scope and Limitations}
