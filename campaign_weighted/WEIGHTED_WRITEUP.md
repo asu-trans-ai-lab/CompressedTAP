@@ -56,8 +56,10 @@ gains land exactly on the regime that was previously least favourable.
 ## 4. Sioux Falls is the extreme case, and it is a trade
 
 At $91\%$ variable reduction the gap falls $11$–$20\%$ relative ($3.4425\% \to 3.0642\%$ at
-$r{=}10$; $3.4402\% \to 2.7525\%$ at $r{=}50$) at two to three times the solution time. With
-that much of the problem compressed, a basis aligned to the flow is harder to optimise over.
+$r{=}10$; $3.4402\% \to 2.7525\%$ at $r{=}50$) --- the largest relative accuracy gain in the
+study. The accompanying solve times are longer, by factors of $1.6$ to $3.5$; only the largest
+of these clears the $1.45\times$ noise floor, so Sioux is the one place a real speed cost may
+be present, and it is reported as "possibly slower" rather than quantified.
 
 ## 5. The offset remains load-bearing under the weighted basis
 
@@ -76,24 +78,26 @@ for the interior anchor; the two are independent, and the Paper-2 argument is un
 > vehicle as equally worth representing. We retain instead the leading subspace of
 > $\operatorname{diag}(\sqrt{w_0})B_2$, minimising reconstruction error weighted by the nominal
 > flow. The two factorisations cost the same, and on the route-rich instances the method
-> targets, the weighted basis is better in both solution time and accuracy, reducing the
-> feasible objective gap by more than half.
+> targets, the weighted basis reduces the feasible objective gap by more than half at no
+> additional preprocessing cost.
 
 **Abstract sentence.**
 > Choosing the retained subspace by flow-weighted rather than plain reconstruction error
 > reduces the feasible objective gap by $50$–$70\%$ on route-rich instances at no additional
 > preprocessing cost.
 
-**Scope sentence to include (pre-empts the referee).**
-> The gain is regime-dependent: on route-rich pools it improves both time and accuracy, while
-> under extreme compression it converts part of the speed advantage into accuracy.
+**Precision sentence to include (pre-empts the referee).**
+> The improvement is in accuracy. Feasible objective gaps are deterministic and reproduce
+> exactly; solution times on these instances vary by up to $1.45	imes$ between identical runs,
+> and only $2$ of the $34$ paired comparisons show a time difference exceeding that, so no
+> speed claim is made for the weighting.
 
 ## 7. Numbers to keep straight
 
 - Preprocessing $0.94$s vs $0.97$s — the "free" claim.
-- Sketch: better on both axes at all five richness points; gap $-53\%$ to $-70\%$ for
-  $\bar K \ge 8.64$.
-- Grid: best cell $7.99\times$ (weighted) vs $7.73\times$; mean gap $1.112\%$ vs $1.285\%$;
-  mean speed $2.47\times$ vs $2.58\times$.
-- Sioux: gap $-11\%$ to $-20\%$ relative, speed $\times0.28$ to $\times0.62$.
+- Sketch: gap improves at all five richness points; $-53\%$ to $-70\%$ for $\bar K \ge 8.64$.
+- Grid: gap lower in $15$ of $20$ cells; mean $1.112\%$ vs $1.285\%$. The speed means
+  ($2.47\times$ vs $2.58\times$) sit inside the noise floor and are not a claim.
+- Sioux: gap $-11\%$ to $-20\%$ relative; times longer, mostly within noise.
+- Paired test over all $34$ comparisons: gap improves in $27$, speed beyond noise in $2$.
 - Offset removal under weighting: mean gap $1.112\% \to 1.394\%$.
