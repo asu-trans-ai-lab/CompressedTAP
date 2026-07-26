@@ -1,0 +1,15 @@
+[T4A-cpp] loading sketch for metrics
+  n=42,774 od=17,464 links=2,950
+[T4A-cpp] reference = C++ tau=0 full solve
+  f_ref=16,771,218.3972 t=29.7s inner=2610
+[T4A-cpp] tau=0.0
+  red=  0.0%  dF= 0.0000%  GapF= +0.00000%  R2=1.0000  cpu=29.7s
+[T4A-cpp] tau=0.46
+  red= 29.5%  dF= 0.0000%  GapF= -0.02744%  R2=0.9997  cpu=56.1s
+[T4A-cpp] tau=1.06
+  red= 41.4%  dF= 0.0000%  GapF= -0.00793%  R2=0.9999  cpu=35.5s
+[T4A-cpp] tau=4.54
+  red= 53.2%  dF= 0.0000%  GapF= +0.00031%  R2=1.0000  cpu=48.7s
+
+wrote C:\source_codes\0_source_code_new\compressed_optimization\git_dev\CompressedTAP\repro_v3\results\table4A_sketch_cpp.csv
+GATE 2: FAIL (recompute_gapf resolves) [(0.46, -0.02744), (1.06, -0.00793)]

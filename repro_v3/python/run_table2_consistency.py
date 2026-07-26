@@ -190,8 +190,11 @@ def main():
     ap.add_argument("--ref-tol", type=float, default=1e-9)
     ap.add_argument("--reps", type=int, default=3)
     ap.add_argument("--out", default=None)
+    ap.add_argument("--rank", type=int, default=None)
     a = ap.parse_args()
-    cfg = NETS[a.net]
+    cfg = dict(NETS[a.net])
+    if a.rank is not None:
+        cfg["rank"] = a.rank
 
     print(f"[table2] loading {a.net}", flush=True)
     P = ca.load_problem(str(cfg["dir"]), cfg["pool"], multi_path_only=cfg["multi"])

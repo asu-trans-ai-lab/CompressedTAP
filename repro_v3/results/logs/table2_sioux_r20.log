@@ -1,0 +1,19 @@
+[table2] loading sioux
+  paths=6464 od=528 links=76
+[table2] reference: full-path GP to certificate 1e-09
+  f_ref=4,231,335.287108  cert=9.077e-10  t=0.32s  it=186
+  Full (tau=0)     Gradient projection [reference] raw= -0.0000%  res=9.52e-11  dF=0.0000%  GapF=+0.000000%  link=0.0000%  t=0.32s
+[table2] full ALM
+  Full (tau=0)     ALM                    raw= +0.0482%  res=8.74e-11  dF=0.0000%  GapF=+0.048187%  link=1.1556%  t=1.43s
+[table2] full Frank-Wolfe
+  Full (tau=0)     Frank-Wolfe            raw= +0.0001%  res=2.42e-10  dF=0.0000%  GapF=+0.000116%  link=0.0005%  t=50.20s
+[table2] full gradient projection
+  Full (tau=0)     Gradient projection    raw= +0.0000%  res=5.47e-11  dF=0.0000%  GapF=+0.000000%  link=0.0045%  t=0.11s
+[table2] compressed tau=600 (q=0.9) majors=533/6464 rank=20
+  Existing (tau=600, r=20) ALM                    raw= +3.4887%  res=1.68e-10  dF=0.0000%  GapF=+3.488707%  link=4.6792%  t=0.11s
+[table2] compressed GP-signed (dense constraint penalised)
+  Existing (tau=600, r=20) GP-signed (penalised)  raw= +3.3082%  res=7.78e-11  dF=0.1015%  GapF=+3.460670%  link=4.6550%  t=600.11s
+
+wrote table2_consistency_sioux_r20.csv
+GATE 1 (reference self-evaluates to zero): PASS (Gap_F=0.00e+00%, R2=1.000000000000)
+GATE 2 (no negative Gap_F): PASS
