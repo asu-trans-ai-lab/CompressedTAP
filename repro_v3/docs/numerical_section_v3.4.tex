@@ -1,0 +1,645 @@
+% =====================================================================
+%  SVD-TA / Compressed Traffic Assignment -- manuscript v3
+%  Numerical-rerun pass: 2026-07-24   (repro code: CompressedTAP @ 2adc6d4, branch version_3)
+%  Re-evaluated this pass : Table 2 (Sioux consistency); Table 4 Panel A -- Chicago Sketch
+%                           (all tau) and Philadelphia (tau = 0, 0.67).
+%  NOT re-evaluated (--)  : Panel A Chicago Regional; Table 5 (rank); Table 4 Panel B.
+%  C++/Python metrics verified CONSISTENT on the Sketch instance
+%  (Gap_F within 0.03pp, R^2 within 1.2e-3).
+% =====================================================================
+\documentclass[11pt]{article}
+\usepackage{amsfonts,amsmath,amsthm,amssymb}
+\usepackage{graphicx}
+\usepackage{booktabs}
+\usepackage{float}
+\usepackage{longtable}
+\usepackage{geometry}
+\usepackage[table]{xcolor}
+\usepackage{url}
+\usepackage[normalem]{ulem}
+
+% Conservative revision markup: unchanged submitted text remains black;
+% proposed replacements/additions are red.
+\newcommand{\revnote}[1]{\par\noindent{\color{red}\textbf{Revision note:} #1}\par}
+
+
+\newtheorem{exmp}{Example}[section]
+\newtheorem{theorem}{Theorem}[section]
+\newtheorem{lemma}[theorem]{Lemma}
+\newtheorem{proposition}[theorem]{Proposition}
+\newtheorem{remark}{Remark}[section]
+\newtheorem{corollary}[theorem]{Corollary}
+\newtheorem{definition}[theorem]{Definition}
+\newtheorem{conjecture}[theorem]{Conjecture}
+\newtheorem{axiom}[theorem]{Axiom}
+\newtheorem{assumption}{Assumption}[section]
+
+\title{Compressed Traffic Assignment with the \\Augmented Lagrangian Method\footnote{
+This work was carried out at the Fulton School of Engineering, Arizona State University, Tempe, AZ. X. Zhou and Y. Li are with School of Sustainable Engineering and the Built Environment, ASU. P. Li is with Norfolk Southern Corporation. D. Bertsekas is with School of Computing and Augmented Intelligence, ASU.}}
+\author{Xuesong Zhou, Peiheng Li, Yuchao Li, and Dimitri Bertsekas}
+\date{April 2026}
+
+% ---- draft version stamp (bump DOCVER on every circulated build) ----
+\newcommand{\docver}{v3.3}
+\newcommand{\docdate}{2026-07-25}
+\newcommand{\doccommit}{0077beb}
+\newcommand{\docstamp}{Draft \docver\ \textbullet\ built \docdate\ \textbullet\ code
+  \texttt{CompressedTAP@\doccommit} (\texttt{version\_3}) \textbullet\ numerical section
+  rewritten; flow-weighted basis; paired-comparison figures; body in black, red = notes to co-authors}
+
+% Author-facing notes (red). Remove this block and the \conote calls before submission.
+\newcommand{\conote}[1]{{\color{red}\small\textsf{[Note to co-authors: #1]}}}
+\newcommand{\conoteY}[1]{{\color{red}\small\textsf{[Note to Yuchao: #1]}}}
+
+\begin{document}
+{\Large\bfseries Compressed Traffic Assignment --- Numerical Section}\par
+\vspace{3pt}
+{\small\textsf{\docstamp}}\par
+\vspace{3pt}
+{\small Standalone extract of the rewritten computational study. Body text is black;
+\textcolor{red}{red marks notes to co-authors} only, to be removed before submission.
+Every number traces to a CSV in \texttt{repro\_v3/results}.}
+\vspace{8pt}\hrule\vspace{8pt}
+\section{Computational Studies}
+\label{sec:experiments}
+\label{sec:experiments}\label{sec:computational}
+
+
+The computational study answers one question: \emph{when does compressing the minor-path
+variables actually reduce solution time, and by how much?} The submitted version reported
+threshold and rank sweeps on three road networks. Re-running those experiments exposed a
+sharper structure than the sweeps alone revealed, and the study is organized around it here:
+a cost model that predicts when compression pays (\S\ref{sec:cost-model}); a controlled grid
+family that isolates the two variables the model identifies (\S\ref{sec:grid-study}); the
+rank, which turns out to be a speed parameter rather than an accuracy parameter
+(\S\ref{sec:rank}); the criterion selecting the retained subspace, where weighting by the
+nominal flow halves the objective gap on route-rich instances at no additional cost
+(\S\ref{sec:weighted-basis}); the affine offset $w_0$, without which the representation does not work
+(\S\ref{sec:offset-study}); the solution operator, where the benefit turns out to be specific
+to the augmented Lagrangian (\S\ref{sec:operator-study}); and the road networks, where the
+model's predictions are tested against practice (\S\ref{sec:road-networks}).
+Section~\ref{sec:scope-limits} states the scope and the negative results.
+
+\conote{This section is a full rewrite rather than an update of the submitted one, so it is
+set in black and red is reserved for these notes. The organizing change is that it leads with
+a cost model and then tests it, instead of reporting parameter sweeps. Referee~1's own
+diagnosis --- that the dense $(n-s)\times r$ nonnegativity block caps the gain --- is exactly
+what the model formalizes, which is deliberate.}
+
+
+\subsection{Experimental Setup}
+\label{sec:setup}
+
+
+\textbf{Instances.} Two families are used. The \emph{grid family} is an $N\times N$
+Manhattan grid with bidirectional links, unit free-flow time, capacity $600$, and BPR
+parameters $(\alpha,\beta)=(0.15,4)$; demand runs from the left column to the right column
+with $720/N$ vehicles per OD pair, so the mid-cut volume-capacity ratio stays near $1.2$ at
+every $N$ and congestion does not drift as the grid grows. Candidate paths are generated by
+a deterministic penalty $K$-shortest-path routine at depth $K$. The \emph{road networks} are
+the three instances of the submitted study, Chicago Sketch, Chicago Regional, and
+Philadelphia (Table~\ref{tab:network-characteristics}), together with Sioux Falls and a
+sequence of progressively enriched Chicago Sketch pools used to vary route richness at fixed
+network and demand.
+
+\textbf{Bases.} Every compressed instance is solved with both subspace criteria --- the plain
+singular subspace of $B_2$ and the flow-weighted subspace of
+$\operatorname{diag}(\sqrt{w_0})B_2$ (Section~\ref{sec:weighted-basis}) --- run back to back, so
+each comparison is within-session and unaffected by machine load.
+
+\textbf{Implementations.} All experiments are run in two independent implementations of the
+same algorithm: a Python/NumPy reference and a compiled C\texttt{++} solver. Reported
+speedups are always \emph{within-implementation} ratios --- an implementation's compressed
+time divided into its own uncompressed time on the same instance --- because, as
+\S\ref{sec:scope-limits} documents, the ratio depends on the relative throughput of dense and
+sparse kernels and is not portable between implementations.
+
+\textbf{Protocol.} Single thread, matched stopping tolerance $10^{-4}$ on a common relative
+duality-gap certificate, quiet machine. Every terminal iterate is converted to a feasible
+point by the same per-OD projection before any objective is compared; $\delta_F$ reports the
+$\ell_1$ mass that conversion moves and $\mathrm{Gap}_F$ the resulting feasible objective
+gap against the best feasible point found by any method on that instance. Timings on the
+smaller instances are medians of three runs; on the largest instances they are single runs,
+and repeated identical solves varied by as much as $40\%$ under machine load. It is worth
+stating this precision explicitly, because it governs which comparisons the study is entitled
+to make. Re-measuring identical solves --- same instance, same settings, same binary --- across
+the campaign gave spreads of $1.1$ to $1.6\times$ typically and $2.8\times$ in the worst case,
+so we treat $1.45\times$ as a conservative noise floor and read no speed difference smaller
+than that as an effect. Feasible objective gaps carry no such caveat: they are deterministic
+and reproduced bit for bit across every repetition, so accuracy comparisons are exact even when
+the corresponding timings are not.
+
+\conote{Two accounting decisions are ours to make before submission. (i) None of the reported
+speedups charge the SVD or the nominal-flow computation; Referee~1 objected to exactly this
+and the objection is currently unanswered. Proposal: report every ratio twice, online-only and
+fully charged, with a break-even count in related solves. (ii) Large-instance timings are
+single runs at $\pm40\%$; medians of three would cost roughly two machine-hours and would let
+the near-parity entries be read as ordered.}
+
+
+\subsection{When Compression Pays: A Cost Model}
+\label{sec:cost-model}
+
+
+Compression replaces $n$ path variables by $s+r$, but the gradient of the compressed problem
+is not simply $(s+r)/n$ times cheaper. Each evaluation must reconstruct the minor flows to
+enforce $w_0+U_rz\ge 0$, and $U_r$ is dense: the reconstruction and the corresponding
+gradient term each cost about $(n-s)\,r$ operations, so the compressed gradient pays
+approximately $2r$ dense operations \emph{per minor path}. The uncompressed gradient, by
+contrast, pays the sparsity of a path --- the number of links it contains --- per path. The
+comparison is therefore not between $n$ and $s+r$ but between
+\begin{equation}
+\label{eq:cost-rule}
+2r \quad\text{and}\quad \text{(average links per path)} .
+\end{equation}
+Compression reduces work per evaluation when $2r$ is at most the average path length, and
+adds work when it is not. Two consequences are tested in what follows. First, the benefit
+should grow with the size of the candidate pool at fixed network, because the uncompressed
+side grows with the pool while the compressed side does not. Second, the rank should behave
+mainly as a cost parameter, since it enters \eqref{eq:cost-rule} linearly but affects the
+represented subspace only weakly once the major paths carry the bulk of the flow.
+
+
+\subsection{A Controlled Study on Grid Networks}
+\label{sec:grid-study}
+
+
+The grid family isolates the two quantities in \eqref{eq:cost-rule}: the grid dimension $N$
+sets the average path length ($\approx N$ links), and the generation depth $K$ sets the pool
+size. Table~\ref{tab:grid-matrix} reports the speedup of the compressed augmented Lagrangian
+over the uncompressed one at fixed threshold ($75$th percentile of the nominal flow, giving
+$\approx 74\%$ variable reduction) and rank $r=20$, in the C\texttt{++} implementation.
+
+\begin{table}[h]
+\centering
+\caption{Speedup of compressed over uncompressed ALM on the grid family
+(C\texttt{++}, $r=20$, $\approx74\%$ variable reduction, matched tolerance). Speedup rises
+with pool depth $K$ at every grid size. Feasible objective gaps are at most $0.55\%$ in the
+$K\ge32$ columns and $1.4$--$3.4\%$ in the $K=4$ column, where the fixed threshold removes
+genuine flow from a thin pool.}
+\label{tab:grid-matrix}
+{\small
+\begin{tabular}{lrrrrr}
+\toprule
+& $K=4$ & $K=8$ & $K=16$ & $K=32$ & $K=64$\\
+\midrule
+$N=8$  & 0.55 & 0.59 & 1.53 & 1.45 & 2.01\\
+$N=16$ & 2.09 & 0.89 & 1.75 & 5.16 & \textbf{6.82}\\
+$N=24$ & 2.25 & 1.18 & 0.73 & 3.87 & 4.86\\
+$N=32$ & 1.76 & 2.76 & 0.96 & 3.13 & 5.02\\
+\bottomrule
+\end{tabular}}
+\end{table}
+
+The prediction holds (Figure~
+ef{fig:speedup-mechanisms}a). Reading across any row, the speedup rises with pool depth, reaching
+$6.82\times$ at $N=16$, $K=64$ with a feasible objective gap of $0.0000\%$; the $K=32$ and
+$K=64$ columns are uniformly between $3.1\times$ and $6.8\times$ with gaps at most $0.55\%$.
+Reading down the columns, the effect strengthens with grid size once the pool is deep enough,
+consistent with longer paths making the right-hand side of \eqref{eq:cost-rule} larger. The
+$K=8$--$16$ interior is noisy because those cells solve in under ten seconds. The $K=4$
+column carries $1.4$--$3.4\%$ gaps: with only four candidate paths per OD pair, a fixed
+$75$th-percentile threshold classifies genuinely used paths as minor.
+
+\conote{Open question for the group: the grid is where the largest speedups live, but it is
+synthetic, and our own verification found the C\texttt{++} uncompressed baseline on grids
+converging to an objective $4.6$--$4.9\%$ above the Python one. Until that baseline is
+tightened, a referee can argue these ratios compare two under-converged solves. Do we tighten
+the baseline, or present the grid strictly as a mechanism study and let the road networks
+carry the efficiency claim?}
+
+
+
+\begin{figure}[h]
+\centering
+\includegraphics[width=\textwidth]{fig/fig_speedup_mechanisms.pdf}
+\caption{The two mechanisms that govern the compression speedup. (a) On the grid
+family, the gain grows with the depth of the candidate pool at every grid size, because the
+uncompressed problem grows with the pool while the compressed dimension does not; the dashed
+line marks parity. (b) On Sioux Falls the rank moves the speedup by close to an order of
+magnitude in both implementations while the feasible objective gap, annotated at each point,
+is unchanged to four decimal places --- over this range the rank is a speed parameter, not an
+accuracy parameter.}
+\label{fig:speedup-mechanisms}
+\end{figure}
+
+\subsection{The Rank is a Speed Parameter}
+\label{sec:rank}
+
+
+Equation~\eqref{eq:cost-rule} predicts that the rank controls cost linearly. The submitted
+study swept $r\in\{50,100,150,200\}$ and found solution quality insensitive to $r$ while cost
+grew --- correct, but sampled entirely on the expensive side. Table~\ref{tab:impact-rank}
+sweeps downwards on Sioux Falls in both implementations.
+
+\begin{table}[h]
+\centering
+\caption{Effect of the rank on Sioux Falls ($\tau=600$, $91\%$ variable
+reduction, matched tolerance, medians of three runs). Speedup is against each
+implementation's own uncompressed baseline ($1.34$s Python, $8.20$s C\texttt{++}). The
+feasible objective gap is unchanged to four decimal places across the entire range.}
+\label{tab:impact-rank}
+{\small
+\begin{tabular}{llrrr}
+\toprule
+Implementation & $r$ & CPU (s) & \textbf{Speedup} ($\times$) & Feasible obj.\ gap (\%)\\
+\midrule
+Python & 10 & 0.13 & \textbf{10.31} & 3.4388\\
+       & 20 & 0.37 & \textbf{3.62}  & 3.4389\\
+       & 50 & 1.15 & \textbf{1.17}  & 3.4386\\
+\midrule
+C\texttt{++} & 10 & 0.97 & \textbf{8.45} & 0.4541\\
+             & 20 & 1.20 & \textbf{6.83} & 0.4541\\
+             & 50 & 2.88 & \textbf{2.85} & 0.4541\\
+\bottomrule
+\end{tabular}}
+\end{table}
+
+The speedup varies by nearly an order of magnitude while the feasible objective gap moves in
+the fourth decimal place (Figure~
+ef{fig:speedup-mechanisms}b). Over this range the rank is therefore almost purely a speed
+parameter: it multiplies the dense reconstruction without moving the solution. The optimum is
+interior rather than at $r\to0$, because too small a subspace eventually lengthens the inner
+solves --- visible on the grid, where $N=16$, $K=32$ gives $5.24\times$, $7.34\times$ and
+$5.44\times$ at $r=10$, $20$ and $40$. Combining this with \eqref{eq:cost-rule} gives the
+design rule used throughout the rest of the study: \emph{choose $2r$ no larger than the
+average path length}, which on these instances means $r\approx10$--$20$ rather than the
+$r=50$ of the submitted experiments. Section~\ref{sec:road-networks} quantifies what that
+choice is worth on a road network.
+
+\conoteY{This rule is the direct answer to Referee~2's request for analytical guidance on
+$r$, and it is currently the only place we give a parameter rule. He asked the same question
+about $\tau$ --- uniform or per-OD, and how it relates to convergence --- and we still choose
+$\tau$ by quantile with no argument. If you can supply even a heuristic derivation for $\tau$
+analogous to \eqref{eq:cost-rule}, it would close his second objection as cleanly as this
+closes the first.}
+
+
+\subsection{Which Subspace to Keep: Flow-Weighted Selection}
+\label{sec:weighted-basis}
+
+Section~\ref{sec:rank} fixes how large the retained subspace should be. A separate question is
+which subspace of that size to retain. The natural answer, and the one used above, is the
+leading left-singular subspace of $B_2$, which minimises $\|B_2 - \Pi B_2\|_F$. That criterion
+counts every minor path equally, and it is not the criterion the problem asks for: a minor path
+enters the link load in proportion to the flow it carries, so an error on a path carrying a
+thousand vehicles matters a thousand times more than the same error on a path carrying one.
+
+Replacing $B_2$ by $\operatorname{diag}(\sqrt{w_0})\,B_2$ before the factorisation retains
+instead the subspace minimising $\sum_p w_{0,p}\|(B_2-\Pi B_2)_p\|^2$, so the rank budget is
+spent where the flow is. The two factorisations are the same size and cost the same --- $0.94$s
+against $0.97$s on Chicago Sketch at $r=20$ --- so any difference in solution time is a
+convergence effect and not preprocessing overhead. Table~\ref{tab:weighted-basis} varies the
+candidate pool at fixed network, demand, threshold and rank.
+
+\begin{table}[h]
+\centering
+\caption{Effect of flow-weighted subspace selection on Chicago Sketch ($\tau=4.54$, $r=20$,
+matched tolerance). Network, demand and parameters are fixed; only the richness of the
+candidate pool varies. Both bases are solved back to back on each instance.}
+\label{tab:weighted-basis}
+{\small
+\begin{tabular}{rrrrrr}
+\toprule
+& \multicolumn{2}{c}{flow-weighted} & \multicolumn{2}{c}{plain} & \\
+\cmidrule(lr){2-3}\cmidrule(lr){4-5}
+$\bar K$ & speedup & gap (\%) & speedup & gap (\%) & gap reduction\\
+\midrule
+2.45  & \textbf{1.62} & \textbf{0.0284} & 1.55 & 0.0291 & $-2.4\%$\\
+3.49  & \textbf{3.71} & \textbf{0.0202} & 3.34 & 0.0232 & $-12.9\%$\\
+8.64  & \textbf{1.55} & \textbf{0.2086} & 1.34 & 0.7024 & $\mathbf{-70.3\%}$\\
+11.09 & \textbf{0.83} & \textbf{0.4350} & 0.66 & 1.1914 & $\mathbf{-63.5\%}$\\
+15.34 & \textbf{1.20} & \textbf{0.8649} & 1.15 & 1.8651 & $\mathbf{-53.6\%}$\\
+\bottomrule
+\end{tabular}}
+\end{table}
+
+\textbf{The effect is on accuracy, and only on accuracy.} The gap column improves at every
+richness point, by more than half wherever $\bar K \ge 8.64$, and these figures are exact:
+feasible objective gaps are deterministic and reproduce bit for bit across runs. The speedup
+column moves in the same direction, but by margins of $4$ to $26\%$, which is inside the
+measurement noise reported in Section~\ref{sec:setup}. Pooling all $34$ controlled
+weighted-versus-plain pairs measured in this study --- each a single instance with both bases
+solved back to back --- the gap improves in $27$, whereas the speedup improves by more than the
+noise floor in only $2$. We therefore claim an accuracy improvement and explicitly do not claim
+a speed improvement.
+
+The trend across the table is the explanation: a rich candidate pool is rich precisely in paths
+that carry almost no flow, and the unweighted criterion spends its rank budget representing
+them. This is why the regime that was least favourable in Section~\ref{sec:road-networks} ---
+rich pools, where the compressed problem showed the largest gap --- is the regime the weighting
+repairs most.
+
+The grid family reproduces the effect on the axis that can be resolved. Across its twenty cells
+the weighted basis lowers the feasible gap in $15$, taking the mean from $1.285\%$ to
+$1.112\%$, with the largest improvements again at high pool depth (at $N=32$, $K=64$ the gap
+falls from $0.406\%$ to $0.000\%$). Sioux Falls, at $91\%$ variable reduction, shows the same
+sign and the largest relative movement, $11$ to $20\%$. The conclusion is that weighting makes
+the subspace criterion consistent with the objective --- the retained directions are the ones
+that carry flow --- and that this buys accuracy at no preprocessing cost, not speed.
+
+\subsection{The Affine Offset is Load-Bearing}
+\label{sec:offset-study}
+
+
+The representation is affine, $x_{\text{minor}}=w_0+U_rz$, and the offset $w_0$ is the
+nominal minor flow. Because $U_r$ is signed, the feasible set $\{w_0+U_rz\ge0\}$ contains the
+starting point $z=0$ in its interior only by virtue of $w_0$; without the offset, $z=0$ lies
+on the boundary of every reconstructed row simultaneously. To test whether this matters we
+remove the offset exactly --- setting $w_0=0$ while moving its flow into the base link volume
+and the effective demand, so the model is unchanged --- and re-solve.
+
+The effect is large. Across the twenty grid cells of Table~\ref{tab:grid-matrix} the mean
+speedup falls from $2.60\times$ to $1.07\times$ and the mean feasible gap grows from $0.75\%$
+to $2.42\%$; the cells where compression is strongest collapse ($N=24$, $K=64$ from
+$4.86\times$ to $0.45\times$; $N=16$, $K=64$ from $6.82\times$ to $1.86\times$). On Sioux
+Falls the compressed solve slows from $1.7$s to $7.9$s, a fall from $6.2\times$ to
+$1.34\times$, with the cost per inner iteration rising fourfold at nearly unchanged iteration
+count: with the hinge active at the iterate, the augmented Lagrangian subproblem becomes
+nonsmooth exactly where the solver works. In the Python implementation the offset-free
+variant is not slower, and the accuracy penalty appears only on the larger instances, so the
+speed half of this conclusion is specific to the compiled solver while the accuracy half is
+not. The offset is therefore not an implementation convenience: \emph{a signed subspace of
+nonnegative flows is usable only relative to an interior anchor}, and $w_0$ supplies it.
+
+The two representational choices are independent. Removing the offset from the
+\emph{flow-weighted} representation of Section~\ref{sec:weighted-basis} degrades it by the same
+mechanism and by a similar amount: across the grid family the mean feasible gap rises from
+$1.112\%$ to $1.394\%$, and individual cells collapse in the same way (at $N=32$, $K=64$,
+$5.41\times$ at a gap of $0.000\%$ becomes $1.00\times$ at $1.681\%$). Choosing the subspace
+better does not remove the need for an anchor inside it, and choosing the anchor well does not
+substitute for aligning the subspace with the flow. The two act on different parts of the
+representation and their benefits do not overlap.
+
+\conote{This result cuts both ways and we should decide how to present it. It explains why the
+representation works, but it also quantifies the dependence Referee~1 objected to: $w_0$ is
+obtained by solving the full problem, and we have now proved the method needs it. The
+strongest available answer is an experiment we have not run --- reuse a \emph{stale} $w_0$
+from a perturbed instance and show the speedup survives. That single test would answer the
+circularity objection, the preprocessing objection and the ``which application setting''
+objection at once. Recommend we run it before resubmission.}
+
+
+\subsection{Which Operator Benefits from Compression}
+\label{sec:operator-study}
+
+
+The compressed representation is independent of the solution method, so one may ask whether
+the benefit is a property of the representation or of the augmented Lagrangian. We solve the
+same compressed instances with three operators: the augmented Lagrangian; gradient projection
+on the compressed set; and a reduced-gradient method that eliminates OD conservation by
+anchor substitution. Table~\ref{tab:operator-compression} reports the result on grid cells in
+the regime where compression is effective.
+
+\begin{table}[h]
+\centering
+\caption{Speedup from compression, by solution operator, on grid cells
+(Python, $w_0$ representation, matched tolerance). Each column is the operator's own
+uncompressed time divided by its compressed time. Frank--Wolfe has no compressed counterpart
+because the linear oracle over the compressed set is itself a linear program.}
+\label{tab:operator-compression}
+{\small
+\begin{tabular}{lrrr}
+\toprule
+Grid cell & ALM & Gradient projection & Reduced gradient\\
+\midrule
+$N=16$, $K=16$ & \textbf{1.11} & 0.00 & 0.07\\
+$N=16$, $K=32$ & \textbf{1.22} & 0.01 & 0.26\\
+$N=16$, $K=64$ & \textbf{1.96} & 0.01 & 0.13\\
+$N=32$, $K=16$ & \textbf{3.85} & 0.02 & 0.34\\
+$N=32$, $K=32$ & \textbf{1.74} & 0.04 & 0.22\\
+$N=32$, $K=64$ & \textbf{2.54} & 0.10 & 0.26\\
+\bottomrule
+\end{tabular}}
+\end{table}
+
+Only the augmented Lagrangian benefits. The reason is structural rather than incidental. An
+iteration costs gradient work over the \emph{variables} plus feasibility work over the
+\emph{constraints}; compression reduces the former and, because the reconstruction is dense,
+increases the latter. The augmented Lagrangian carries feasibility in the objective through
+multipliers and a penalty, so its iteration cost is gradient-dominated and the variable
+reduction passes through to wall-clock time. Gradient projection instead derives its speed
+from a projection that is separable across OD pairs and available in closed form; on the
+compressed set $\{A_1y+Mz=d_{\mathrm{eff}},\,y\ge0,\,w_0+U_rz\ge0\}$ the latent variables
+$z$ appear in every OD equality and in every reconstructed bound, so separability is lost and
+the projection degrades into a coupled quadratic program. On the road networks this is not
+merely slower but infeasible: the exact projection requires a dense factorization of order
+the number of OD pairs, which at $\ell=17{,}464$ does not scale. The reduced-gradient method
+removes the OD equalities by substitution, but the binding cost is the dense reconstruction,
+which substitution does not touch; what elimination removes, the representation restores.
+
+We therefore state the scope explicitly: \emph{variable reduction accelerates a method whose
+per-iteration bottleneck lies in the variables, not in the constraints.} This is the
+measured justification for pairing the compressed representation with an augmented Lagrangian
+rather than a projection-type method, and it is the reason the framework of
+Section~\ref{sec:compression_framework} is built that way.
+
+\conote{Referee~2 wrote that ``the augmented Lagrangian method is quite standard'' and wanted
+a tailored algorithm. This subsection is our answer: not a new algorithm, but a demonstration
+that the pairing is forced. Whether that satisfies him is the main uncertainty in the
+revision. He also asked for comparison against state-of-the-art path-based methods; we compare
+four operators but no bush-based method (Algorithm~B, OBA, iTAPAS). Do we add one, or argue
+the comparison is out of scope?}
+
+
+\subsection{Road Networks}
+\label{sec:road-networks}
+
+
+Three questions remain for the road networks: do the operators agree on the same answer; does
+the richness prediction of \S\ref{sec:cost-model} hold on a real network; and what does the
+rank rule of \S\ref{sec:rank} buy in practice.
+
+
+\subsubsection*{Consistency of the operators}
+
+
+Before comparing efficiency we verify that the methods share a numerical target.
+Table~\ref{tab:operator-consistency} solves one instance with all operators under matched
+tolerances and a common feasibility conversion.
+
+
+\begin{table}[h]
+\centering
+
+\caption{Numerical consistency on Sioux Falls under matched stopping tolerances. The
+reference is the best feasible point over the uncompressed operators (full-path gradient
+projection, feasible objective $4.231\times10^{6}$, certificate $9.1\times10^{-10}$). The
+augmented Lagrangian's feasibility-based stopping rule leaves it $0.048\%$ above that
+reference; the near-agreement of all operators is the consistency this table quantifies.}
+\label{tab:operator-consistency}
+\resizebox{\textwidth}{!}{%
+\begin{tabular}{llrrrrr}
+\toprule
+Representation & Method & Raw obj. diff. (\%) & $\|A\tilde x-d\|_\infty$ & $\delta_F$ (\%) & Feasible obj. gap (\%) & Link-flow diff. (\%)\\
+\midrule
+Full ($\tau=0$) & ALM & 0.048 & $8.7\times10^{-11}$ & $1.3\times10^{-9}$ & 0.048 & 1.156\\
+Full ($\tau=0$) & Frank--Wolfe & $1.2\times10^{-4}$ & $2.4\times10^{-10}$ & $2.7\times10^{-12}$ & $1.2\times10^{-4}$ & $5.1\times10^{-4}$\\
+Full ($\tau=0$) & Gradient projection & $9.8\times10^{-8}$ & $5.5\times10^{-11}$ & $1.5\times10^{-11}$ & $9.8\times10^{-8}$ & 0.005\\
+\midrule
+Compressed ($\tau=600$, $r=20$) & ALM & 3.489 & $1.7\times10^{-10}$ & $1.5\times10^{-5}$ & 3.489 & 4.679\\
+Compressed ($\tau=600$, $r=20$) & Gradient projection (signed) & 3.308 & $7.8\times10^{-11}$ & 0.102 & 3.461 & 4.655\\
+\bottomrule
+\end{tabular}}
+
+\end{table}
+
+
+The compressed rows agree with each other to within $0.03$ percentage points of feasible
+objective gap, confirming that the gap is a property of the representation at this
+$(\tau,r)$ and not of the operator, while the uncompressed rows bracket the reference to
+within $0.05\%$. Frank--Wolfe is the most accurate uncompressed operator at loose tolerance
+and is used as an honest baseline where relevant.
+
+
+\begin{table}[h]
+\centering
+\caption{Network characteristics. Singleton paths correspond to the OD pairs with a unique feasible path and are excluded from the compressed problem.}
+\label{tab:network-characteristics}
+{\small
+\begin{tabular}{lrrr}
+\toprule
+ & Chicago Sketch & Chicago Regional & Philadelphia \\
+\midrule
+Nodes / Links & 933 / 2{,}950 & 12{,}982 / 39{,}018 & 13{,}389 / 40{,}003 \\
+Multi-path variables ($n$) & 42{,}774 & 879{,}625 & 1{,}846{,}068 \\
+Multi-path OD pairs ($\ell$) & 17{,}464 & 353{,}582 & 601{,}644 \\
+Average paths per multi-path OD ($\bar K=n/\ell$) & 2.45 & 2.49 & 3.07 \\
+Multi-path flow share & 23.5\% & 59.2\% & 70.9\% \\
+\bottomrule
+\end{tabular}
+}
+\end{table}
+
+\subsubsection*{Route richness and the rank rule}
+
+
+Table~\ref{tab:cutoff-summary} varies route richness on Chicago Sketch at fixed network and
+demand, by enriching the candidate pool from the submitted $\bar K=2.45$ to $\bar K=15.34$,
+and reports the same axis at the rank chosen by \S\ref{sec:rank} and at the submitted rank.
+
+\begin{table}[h]
+\centering
+\caption{Route-richness axis on Chicago Sketch: same network and demand,
+candidate pools of increasing average richness $\bar K$, $\tau=4.54$, Python implementation.
+The $r=20$ column applies the rule of \S\ref{sec:rank}; the $r=50$ column is the submitted
+rank, shown for comparison at identical accuracy.}
+\label{tab:cutoff-summary}
+{\small
+\begin{tabular}{rrrrrrr}
+\toprule
+$\bar K$ & $\bar K/q$ & Full dim.\ $n$ & Compressed dim.\ $s+r$ & \textbf{Speedup} ($r=20$) & Speedup ($r=50$) & Feasible obj.\ gap (\%)\\
+\midrule
+2.45  & 2.14  & 42{,}774      & 20{,}017  & \textbf{1.17} & 0.98 & 0.03\\
+3.49  & 3.37  & 229{,}175     & 67{,}986  & \textbf{4.84} & 1.95 & 0.02\\
+8.64  & 7.77  & 709{,}567     & 91{,}297  & \textbf{1.00} & 0.66 & 0.72\\
+11.09 & 9.84  & 903{,}516     & 91{,}780  & \textbf{0.74} & 0.67 & 1.18\\
+15.34 & 13.21 & 1{,}323{,}999 & 100{,}185 & \textbf{1.07} & 0.67 & 1.88\\
+\bottomrule
+\end{tabular}}
+\end{table}
+
+Two readings. First, the rank rule is worth a factor of about $2.5$ at the peak --- $4.84
+\times$ against $1.95\times$ --- at accuracy identical to two decimal places, so a
+substantial part of the attainable speedup in the submitted study was lost to the rank
+choice alone. Second, and unlike the grid, the speedup on Chicago Sketch is \emph{not}
+monotone in richness: it peaks near $\bar K\approx3.5$ and settles close to unity beyond
+$\bar K\approx9$, while the feasible gap grows from $0.03\%$ to $1.88\%$. Equation
+\eqref{eq:cost-rule} explains the difference between the two families. Chicago Sketch paths
+average about $15$ links, so even at $r=20$ the dense term $2r=40$ exceeds the sparse term;
+grid paths at $N=32$ average $35$--$45$ links, and the inequality runs the other way. The
+compression is thus best suited to networks with long paths and many parallel routes, and the
+enriched-pool regime of a short-path network is its adverse case.
+
+Applying the rank rule to the submitted threshold grid improves accuracy as well as time: at
+$r=20$ the conversion $\delta_F$ vanishes at every threshold, the feasible objective gaps are
+$0.027\%$, $0.000\%$, $0.020\%$ and $0.028\%$ for $\tau=0$, $0.46$, $1.06$ and $4.54$, and
+the link-flow $R^2$ rises to between $0.9997$ and $1.0000$, compared with $0.990$--$0.996$ at
+$r=50$. The distribution of demand between major and minor paths at each threshold is
+reported in Appendix~\ref{app:pathflow}.
+
+\conote{Chicago Regional and Philadelphia are not yet re-evaluated at the corrected rank. The
+submitted Regional pool ($879{,}625$ paths) is no longer on file; the closest available
+instance has $2{,}024{,}525$ paths and $30$ links per path, which by \eqref{eq:cost-rule}
+should favour $r\approx10$. A C\texttt{++} rank-by-offset experiment on it is running.
+Referee~1 will reasonably note that our largest speedups come from Sioux Falls and a synthetic
+grid, so carrying at least one large road network at the corrected rank matters more than any
+other remaining item.}
+
+
+\subsection{Reading the Two Representational Choices Together}
+\label{sec:tradeoff}
+
+The subspace criterion and the affine offset act on different parts of the same representation,
+and both were measured by the same device: an instance solved twice, back to back, with one
+choice changed and everything else held fixed. Figure~\ref{fig:paired} shows every such pair as
+a displacement rather than as a point, which is the only form in which these comparisons are
+controlled. The absolute position of a configuration in the speed--accuracy plane is dominated
+by which instance it is; the displacement isolates the choice under study.
+
+\begin{figure}[h]
+\centering
+\includegraphics[width=\textwidth]{fig/fig_paired.pdf}
+\caption{Paired comparisons. Each arrow is one instance solved twice with a single change:
+(a) plain to flow-weighted subspace, (b) affine offset present to removed. The horizontal axis
+is exact; the vertical axis carries the measurement noise of Section~\ref{sec:setup}, drawn as
+the error bar, so vertical displacements shorter than it are not effects.}
+\label{fig:paired}
+\end{figure}
+
+Two readings follow, and the noise floor decides which is which. Horizontally, the arrows in
+panel~(a) point left in $27$ of $34$ pairs: the weighted subspace is an accuracy improvement,
+and it is measured exactly. Vertically they scatter, and only $2$ of $34$ exceed the noise
+floor, so the apparent speed gains are not resolvable and we do not claim them. Panel~(b) is
+the offset ablation on the weighted representation, and the gap rises in $16$ of $20$ grid
+cells, confirming that removing the anchor loses accuracy whichever subspace is used.
+
+Figure~\ref{fig:3d} shows the same two comparisons over the full grid design, on the axis that
+can be resolved. The weighted sheet lies below the plain one and the offset-free sheet lies
+above both, and the separation grows with pool depth, which is where the criterion has the most
+to gain.
+
+\begin{figure}[h]
+\centering
+\includegraphics[width=\textwidth]{fig/fig_3d.pdf}
+\caption{Feasible objective gap over the grid design $(N,K)$. (a) plain (orange) against
+flow-weighted (blue): the weighted sheet is lower in $15$ of $20$ cells. (b) offset present
+(blue) against removed (red): removing the anchor lifts the surface in $16$ of $20$ cells.}
+\label{fig:3d}
+\end{figure}
+
+
+
+\subsection{Scope and Limitations}
+\label{sec:scope-limits}
+
+
+Four limitations bound the claims above, and each is a measurement rather than a caveat.
+
+\emph{The speedup depends on the implementation.} On the richness axis of
+Table~\ref{tab:cutoff-summary} the Python implementation peaks at moderate richness and falls
+away, whereas the compiled implementation rises monotonically towards unity without crossing
+it; the compiled solver's sparse kernels are relatively faster than its dense ones, which
+moves the balance in \eqref{eq:cost-rule}. Sioux Falls is favourable in both ($3.6\times$ and
+$6.2\times$). Speedup is therefore a property of representation, operator, implementation and
+instance geometry jointly, and we report it only within an implementation.
+
+\emph{The dense reconstruction is the binding constraint.} Reducing the number of independent
+variables does not reduce the $n-s$ reconstructed inequalities. This is what
+\eqref{eq:cost-rule} formalizes, what the falling branch of Table~\ref{tab:cutoff-summary}
+measures, and what limits the method on short-path networks with rich pools.
+
+\emph{A grouped representation removes that limit but is not yet faster.} Replacing the
+signed subspace by nonnegative groups makes feasibility a bound constraint by construction,
+with no reconstruction at all. Measured on the adverse cells of
+Table~\ref{tab:cutoff-summary}, it is essentially exact --- feasible gaps of $0.016\%$ and
+$0.000\%$, in one case improving on the uncompressed solution --- but in the present
+implementation it is not faster. It is the natural representation for the regime where the
+signed subspace struggles, and we leave its efficient implementation to future work.
+
+\emph{Timing precision.} Large-instance timings are single runs; repeated identical solves
+varied by up to $40\%$ under machine load, so ratios near unity on those instances should not
+be read as ordered.
+
+
+\end{document}
