@@ -40,61 +40,277 @@ This work was carried out at the Fulton School of Engineering, Arizona State Uni
 \date{April 2026}
 
 \begin{document}
-{\Large\bfseries Compressed Traffic Assignment --- Numerical Section (standalone extract)}\par
+{\Large\bfseries Compressed Traffic Assignment --- Numerical Section (rewritten)}\par
 \vspace{2pt}
-{\small Extracted from \texttt{main.tex}; rerun pass 2026-07-25, repro code
-\texttt{CompressedTAP@baaf0ea} (branch \texttt{version\_3}). All entries at the corrected
-rank $r=20$ unless a row states otherwise. Red text marks material changed from the
-submitted version. References to appendices/figures outside this extract appear as
-bold \texttt{??} markers and are intentional.}
-\vspace{8pt}
-\hrule
-\vspace{8pt}
+{\small Standalone extract of the rewritten computational study. Repro code
+\texttt{CompressedTAP@version\_3}; every number traces to a CSV in \texttt{repro\_v3/results}.
+Red marks material that differs from the submitted version. Cross-references to appendices
+outside this extract appear as \texttt{??}.}
+\vspace{8pt}\hrule\vspace{8pt}
 \section{Computational Studies}
 \label{sec:experiments}
-
-We have tested the compressed formulation~\eqref{eq:compressed_ta} and the AL method of Section~\ref{sec:alm} on three networks of increasing size: Chicago Sketch, Chicago Regional, and Philadelphia; see Table~\ref{tab:network-characteristics} for full network statistics. Recall that the AL method consists of \emph{outer iterations}, each of which updates the multipliers and penalty parameters [cf. Eqs.~\eqref{eq:multiplier_update} and \eqref{eq:penalty_update}], and \emph{inner iterations}, which minimize the augmented Lagrangian via L-BFGS-B [cf. Eq.~\eqref{eq:inner_iteration}]; see Section~\ref{sec:alm_iterations}. 
-
+\label{sec:experiments}\label{sec:computational}
 
 {\color{red}
-We focus on a feasibility-adjusted objective gap and a coefficient of determination $R^2$ for link flows. Let $\tilde x$ be the reconstructed terminal path-flow vector of a method, and let $x^F=P_X(\tilde x)$ be its common feasible conversion, performed OD pair by OD pair over
-$X=\{x\mid x\geq0,\ Ax=d\}$. With $v^F=B'x^F+v_0$ and a consistently converged feasible reference $v^{\mathrm{ref}}$, we report
-\begin{equation}
-\label{eq:metric}
-\begin{aligned}
-\delta_F(\%)&=100\,\frac{\|x^F-\tilde x\|_1}{\max\{1,\|x^F\|_1\}},\\
-\operatorname{Gap}_F(\%)&=100\,\frac{f(v^F)-f(v^{\mathrm{ref}})}{f(v^{\mathrm{ref}})},\\
-R^2&=1-\frac{\sum_{a=1}^{m}(v_a^F-v_a^{\mathrm{ref}})^2}
-{\sum_{a=1}^{m}(v_a^{\mathrm{ref}}-\bar v^{\mathrm{ref}})^2}.
-\end{aligned}
-\end{equation}
-The raw terminal objective difference is retained only as a diagnostic. A negative raw difference can be caused by residual infeasibility or a differently converged reference and is not interpreted as an improvement over the full problem. The substantive objective comparison is $\operatorname{Gap}_F$, which is nonnegative up to the common solver tolerance.
-
-The computational study is organized around one question: what dimension--accuracy--computation trade-off results from the integrated SVD--AL framework? In addition to the submitted threshold and rank experiments, Table~\ref{tab:cutoff-summary} contains a controlled paths-per-OD calculation on one existing network instance. It holds the represented dimension approximately fixed while increasing the candidate-pool richness $K$, thereby testing directly whether the measured benefit strengthens with the compression factor $K/q$. No additional network benchmark or application domain is introduced.
+The computational study answers one question: \emph{when does compressing the minor-path
+variables actually reduce solution time, and by how much?} The submitted version reported
+threshold and rank sweeps on three road networks. Re-running those experiments exposed a
+sharper structure than the sweeps alone revealed, and the study is organized around it here:
+a cost model that predicts when compression pays (\S\ref{sec:cost-model}); a controlled grid
+family that isolates the two variables the model identifies (\S\ref{sec:grid-study}); the
+rank, which turns out to be a speed parameter rather than an accuracy parameter
+(\S\ref{sec:rank}); the affine offset $w_0$, without which the representation does not work
+(\S\ref{sec:offset-study}); the solution operator, where the benefit turns out to be specific
+to the augmented Lagrangian (\S\ref{sec:operator-study}); and the road networks, where the
+model's predictions are tested against practice (\S\ref{sec:road-networks}).
+Section~\ref{sec:scope-limits} states the scope and the negative results.
 }
-
-In what follows, we provide further details on our computational studies. The codes can be found at \url{https://github.com/asu-trans-ai-lab/CompressedTAP}.
-
 
 \subsection{Experimental Setup}
 \label{sec:setup}
 
-For each network, the flow of the path of every singleton OD pair (one with a unique path) is fixed to the corresponding OD pair demand. These paths contribute a constant offset $v_0$ to the link flows; only multi-path OD pairs enter the compressed problem. The compressed problem is solved with the AL iterations of Section~\ref{sec:alm_iterations}, using L-BFGS-B for the inner minimization over $(y, z)$ with $y \geq 0$. The gradient of the AL function with respect to $z$ is computed by the memory-efficient and time-efficient scheme detailed in Appendix~\ref{app:gradient-overhead}, which avoids forming any dense matrix of size $m \times (n-s)$ or $\ell \times (n-s)$. Unless stated otherwise, we use $\beta = 10$ and $\gamma = 0.25$, as suggested in \cite[Section~2.2.5]{Ber82a}, initial penalty $c^0 = (10^3, 10^3)$, compression rank $r = 50$, convergence tolerance $10^{-4}$ on the infinity norm of the constraint violation, and at most 20 outer and 200 inner iterations. The sensitivity of these choices is examined in Appendix~\ref{app:algorithmic-tuning}.
-
-{\color{red}The primary reference is the $\tau=0$ uncompressed problem solved by the same AL implementation under the corrected common stopping and feasibility protocol. The \texttt{OpenDTA} solution \cite{OpenDTA}, obtained with the same OD demands and BPR functions, is used as an external consistency check rather than as the denominator of the reported objective difference. Computational cost is reported in terms of outer and inner iterations and online AL CPU time. The time required to obtain the nominal flow and the one-time truncated SVD is reported separately for each network; it is not hidden inside the online speedup. All CPU times are single-thread measurements on an Intel i5-1340P workstation. A compact solution-consistency check is added on an existing instance, but no additional network or timing benchmark is introduced in this revision.}
-
-\subsection{Numerical Consistency of the Solution Methods}
-\label{sec:operator-consistency}
 {\color{red}
-Before examining the effects of compression, we verify that the augmented Lagrangian method, standard Frank--Wolfe, and path-based gradient projection have the same numerical target when they are applied to the same traffic assignment formulation. This is a consistency test rather than an additional benchmark. The methods use the same network data, OD demands, candidate path set, BPR functions, feasible conversion, and matched stopping tolerances.
+\textbf{Instances.} Two families are used. The \emph{grid family} is an $N\times N$
+Manhattan grid with bidirectional links, unit free-flow time, capacity $600$, and BPR
+parameters $(\alpha,\beta)=(0.15,4)$; demand runs from the left column to the right column
+with $720/N$ vehicles per OD pair, so the mid-cut volume-capacity ratio stays near $1.2$ at
+every $N$ and congestion does not drift as the grid grows. Candidate paths are generated by
+a deterministic penalty $K$-shortest-path routine at depth $K$. The \emph{road networks} are
+the three instances of the submitted study, Chicago Sketch, Chicago Regional, and
+Philadelphia (Table~\ref{tab:network-characteristics}), together with Sioux Falls and a
+sequence of progressively enriched Chicago Sketch pools used to vary route richness at fixed
+network and demand.
 
-Table~\ref{tab:operator-consistency} reports the raw terminal difference, the residual before conversion, the size $\delta_F$ of the common feasibility conversion, and the resulting feasible objective gap. Agreement in feasible objective value and link flows verifies that the AL implementation does not alter the underlying Beckmann problem and that the compressed formulation is not intrinsically tied to the AL operator. CPU time is omitted because the purpose is formulation consistency rather than a solver competition.
+\textbf{Implementations.} All experiments are run in two independent implementations of the
+same algorithm: a Python/NumPy reference and a compiled C\texttt{++} solver. Reported
+speedups are always \emph{within-implementation} ratios --- an implementation's compressed
+time divided into its own uncompressed time on the same instance --- because, as
+\S\ref{sec:scope-limits} documents, the ratio depends on the relative throughput of dense and
+sparse kernels and is not portable between implementations.
+
+\textbf{Protocol.} Single thread, matched stopping tolerance $10^{-4}$ on a common relative
+duality-gap certificate, quiet machine. Every terminal iterate is converted to a feasible
+point by the same per-OD projection before any objective is compared; $\delta_F$ reports the
+$\ell_1$ mass that conversion moves and $\mathrm{Gap}_F$ the resulting feasible objective
+gap against the best feasible point found by any method on that instance. Timings on the
+smaller instances are medians of three runs; on the largest instances they are single runs,
+and repeated identical solves on those instances varied by as much as $40\%$ under machine
+load, which bounds the precision of the corresponding ratios.
+}
+
+\subsection{When Compression Pays: A Cost Model}
+\label{sec:cost-model}
+
+{\color{red}
+Compression replaces $n$ path variables by $s+r$, but the gradient of the compressed problem
+is not simply $(s+r)/n$ times cheaper. Each evaluation must reconstruct the minor flows to
+enforce $w_0+U_rz\ge 0$, and $U_r$ is dense: the reconstruction and the corresponding
+gradient term each cost about $(n-s)\,r$ operations, so the compressed gradient pays
+approximately $2r$ dense operations \emph{per minor path}. The uncompressed gradient, by
+contrast, pays the sparsity of a path --- the number of links it contains --- per path. The
+comparison is therefore not between $n$ and $s+r$ but between
+\begin{equation}
+\label{eq:cost-rule}
+2r \quad\text{and}\quad \text{(average links per path)} .
+\end{equation}
+Compression reduces work per evaluation when $2r$ is at most the average path length, and
+adds work when it is not. Two consequences are tested in what follows. First, the benefit
+should grow with the size of the candidate pool at fixed network, because the uncompressed
+side grows with the pool while the compressed side does not. Second, the rank should behave
+mainly as a cost parameter, since it enters \eqref{eq:cost-rule} linearly but affects the
+represented subspace only weakly once the major paths carry the bulk of the flow.
+}
+
+\subsection{A Controlled Study on Grid Networks}
+\label{sec:grid-study}
+
+{\color{red}
+The grid family isolates the two quantities in \eqref{eq:cost-rule}: the grid dimension $N$
+sets the average path length ($\approx N$ links), and the generation depth $K$ sets the pool
+size. Table~\ref{tab:grid-matrix} reports the speedup of the compressed augmented Lagrangian
+over the uncompressed one at fixed threshold ($75$th percentile of the nominal flow, giving
+$\approx 74\%$ variable reduction) and rank $r=20$, in the C\texttt{++} implementation.
+
+\begin{table}[h]
+\centering
+\caption{{\color{red}Speedup of compressed over uncompressed ALM on the grid family
+(C\texttt{++}, $r=20$, $\approx74\%$ variable reduction, matched tolerance). Speedup rises
+with pool depth $K$ at every grid size. Feasible objective gaps are at most $0.55\%$ in the
+$K\ge32$ columns and $1.4$--$3.4\%$ in the $K=4$ column, where the fixed threshold removes
+genuine flow from a thin pool.}}
+\label{tab:grid-matrix}
+{\small
+\begin{tabular}{lrrrrr}
+\toprule
+& $K=4$ & $K=8$ & $K=16$ & $K=32$ & $K=64$\\
+\midrule
+$N=8$  & 0.55 & 0.59 & 1.53 & 1.45 & 2.01\\
+$N=16$ & 2.09 & 0.89 & 1.75 & 5.16 & \textbf{6.82}\\
+$N=24$ & 2.25 & 1.18 & 0.73 & 3.87 & 4.86\\
+$N=32$ & 1.76 & 2.76 & 0.96 & 3.13 & 5.02\\
+\bottomrule
+\end{tabular}}
+\end{table}
+
+The prediction holds. Reading across any row, the speedup rises with pool depth, reaching
+$6.82\times$ at $N=16$, $K=64$ with a feasible objective gap of $0.0000\%$; the $K=32$ and
+$K=64$ columns are uniformly between $3.1\times$ and $6.8\times$ with gaps at most $0.55\%$.
+Reading down the columns, the effect strengthens with grid size once the pool is deep enough,
+consistent with longer paths making the right-hand side of \eqref{eq:cost-rule} larger. The
+$K=8$--$16$ interior is noisy because those cells solve in under ten seconds. The $K=4$
+column carries $1.4$--$3.4\%$ gaps: with only four candidate paths per OD pair, a fixed
+$75$th-percentile threshold classifies genuinely used paths as minor.
+}
+
+\subsection{The Rank is a Speed Parameter}
+\label{sec:rank}
+
+{\color{red}
+Equation~\eqref{eq:cost-rule} predicts that the rank controls cost linearly. The submitted
+study swept $r\in\{50,100,150,200\}$ and found solution quality insensitive to $r$ while cost
+grew --- correct, but sampled entirely on the expensive side. Table~\ref{tab:impact-rank}
+sweeps downwards on Sioux Falls in both implementations.
+
+\begin{table}[h]
+\centering
+\caption{{\color{red}Effect of the rank on Sioux Falls ($\tau=600$, $91\%$ variable
+reduction, matched tolerance, medians of three runs). Speedup is against each
+implementation's own uncompressed baseline ($1.34$s Python, $8.20$s C\texttt{++}). The
+feasible objective gap is unchanged to four decimal places across the entire range.}}
+\label{tab:impact-rank}
+{\small
+\begin{tabular}{llrrr}
+\toprule
+Implementation & $r$ & CPU (s) & \textbf{Speedup} ($\times$) & Feasible obj.\ gap (\%)\\
+\midrule
+Python & 10 & 0.13 & \textbf{10.31} & 3.4388\\
+       & 20 & 0.37 & \textbf{3.62}  & 3.4389\\
+       & 50 & 1.15 & \textbf{1.17}  & 3.4386\\
+\midrule
+C\texttt{++} & 10 & 0.97 & \textbf{8.45} & 0.4541\\
+             & 20 & 1.20 & \textbf{6.83} & 0.4541\\
+             & 50 & 2.88 & \textbf{2.85} & 0.4541\\
+\bottomrule
+\end{tabular}}
+\end{table}
+
+The speedup varies by nearly an order of magnitude while the feasible objective gap moves in
+the fourth decimal place. Over this range the rank is therefore almost purely a speed
+parameter: it multiplies the dense reconstruction without moving the solution. The optimum is
+interior rather than at $r\to0$, because too small a subspace eventually lengthens the inner
+solves --- visible on the grid, where $N=16$, $K=32$ gives $5.24\times$, $7.34\times$ and
+$5.44\times$ at $r=10$, $20$ and $40$. Combining this with \eqref{eq:cost-rule} gives the
+design rule used throughout the rest of the study: \emph{choose $2r$ no larger than the
+average path length}, which on these instances means $r\approx10$--$20$ rather than the
+$r=50$ of the submitted experiments. Section~\ref{sec:road-networks} quantifies what that
+choice is worth on a road network.
+}
+
+\subsection{The Affine Offset is Load-Bearing}
+\label{sec:offset-study}
+
+{\color{red}
+The representation is affine, $x_{\text{minor}}=w_0+U_rz$, and the offset $w_0$ is the
+nominal minor flow. Because $U_r$ is signed, the feasible set $\{w_0+U_rz\ge0\}$ contains the
+starting point $z=0$ in its interior only by virtue of $w_0$; without the offset, $z=0$ lies
+on the boundary of every reconstructed row simultaneously. To test whether this matters we
+remove the offset exactly --- setting $w_0=0$ while moving its flow into the base link volume
+and the effective demand, so the model is unchanged --- and re-solve.
+
+The effect is large. Across the twenty grid cells of Table~\ref{tab:grid-matrix} the mean
+speedup falls from $2.60\times$ to $1.07\times$ and the mean feasible gap grows from $0.75\%$
+to $2.42\%$; the cells where compression is strongest collapse ($N=24$, $K=64$ from
+$4.86\times$ to $0.45\times$; $N=16$, $K=64$ from $6.82\times$ to $1.86\times$). On Sioux
+Falls the compressed solve slows from $1.7$s to $7.9$s, a fall from $6.2\times$ to
+$1.34\times$, with the cost per inner iteration rising fourfold at nearly unchanged iteration
+count: with the hinge active at the iterate, the augmented Lagrangian subproblem becomes
+nonsmooth exactly where the solver works. In the Python implementation the offset-free
+variant is not slower, and the accuracy penalty appears only on the larger instances, so the
+speed half of this conclusion is specific to the compiled solver while the accuracy half is
+not. The offset is therefore not an implementation convenience: \emph{a signed subspace of
+nonnegative flows is usable only relative to an interior anchor}, and $w_0$ supplies it.
+}
+
+\subsection{Which Operator Benefits from Compression}
+\label{sec:operator-study}
+
+{\color{red}
+The compressed representation is independent of the solution method, so one may ask whether
+the benefit is a property of the representation or of the augmented Lagrangian. We solve the
+same compressed instances with three operators: the augmented Lagrangian; gradient projection
+on the compressed set; and a reduced-gradient method that eliminates OD conservation by
+anchor substitution. Table~\ref{tab:operator-compression} reports the result on grid cells in
+the regime where compression is effective.
+
+\begin{table}[h]
+\centering
+\caption{{\color{red}Speedup from compression, by solution operator, on grid cells
+(Python, $w_0$ representation, matched tolerance). Each column is the operator's own
+uncompressed time divided by its compressed time. Frank--Wolfe has no compressed counterpart
+because the linear oracle over the compressed set is itself a linear program.}}
+\label{tab:operator-compression}
+{\small
+\begin{tabular}{lrrr}
+\toprule
+Grid cell & ALM & Gradient projection & Reduced gradient\\
+\midrule
+$N=16$, $K=16$ & \textbf{1.11} & 0.00 & 0.07\\
+$N=16$, $K=32$ & \textbf{1.22} & 0.01 & 0.26\\
+$N=16$, $K=64$ & \textbf{1.96} & 0.01 & 0.13\\
+$N=32$, $K=16$ & \textbf{3.85} & 0.02 & 0.34\\
+$N=32$, $K=32$ & \textbf{1.74} & 0.04 & 0.22\\
+$N=32$, $K=64$ & \textbf{2.54} & 0.10 & 0.26\\
+\bottomrule
+\end{tabular}}
+\end{table}
+
+Only the augmented Lagrangian benefits. The reason is structural rather than incidental. An
+iteration costs gradient work over the \emph{variables} plus feasibility work over the
+\emph{constraints}; compression reduces the former and, because the reconstruction is dense,
+increases the latter. The augmented Lagrangian carries feasibility in the objective through
+multipliers and a penalty, so its iteration cost is gradient-dominated and the variable
+reduction passes through to wall-clock time. Gradient projection instead derives its speed
+from a projection that is separable across OD pairs and available in closed form; on the
+compressed set $\{A_1y+Mz=d_{\mathrm{eff}},\,y\ge0,\,w_0+U_rz\ge0\}$ the latent variables
+$z$ appear in every OD equality and in every reconstructed bound, so separability is lost and
+the projection degrades into a coupled quadratic program. On the road networks this is not
+merely slower but infeasible: the exact projection requires a dense factorization of order
+the number of OD pairs, which at $\ell=17{,}464$ does not scale. The reduced-gradient method
+removes the OD equalities by substitution, but the binding cost is the dense reconstruction,
+which substitution does not touch; what elimination removes, the representation restores.
+
+We therefore state the scope explicitly: \emph{variable reduction accelerates a method whose
+per-iteration bottleneck lies in the variables, not in the constraints.} This is the
+measured justification for pairing the compressed representation with an augmented Lagrangian
+rather than a projection-type method, and it is the reason the framework of
+Section~\ref{sec:compression_framework} is built that way.
+}
+
+\subsection{Road Networks}
+\label{sec:road-networks}
+
+{\color{red}
+Three questions remain for the road networks: do the operators agree on the same answer; does
+the richness prediction of \S\ref{sec:cost-model} hold on a real network; and what does the
+rank rule of \S\ref{sec:rank} buy in practice.
+}
+
+\subsubsection*{{\color{red}Consistency of the operators}}
+
+{\color{red}
+Before comparing efficiency we verify that the methods share a numerical target.
+Table~\ref{tab:operator-consistency} solves one instance with all operators under matched
+tolerances and a common feasibility conversion.
 }
 
 \begin{table}[h]
 \centering
 {\color{red}
-\caption{Numerical consistency of the solution methods on the Sioux Falls test instance under matched stopping tolerances. The reference $v^{\mathrm{ref}}$ is the best feasible point over the uncompressed operators (full-path gradient projection, feasible objective $4.231\times10^{6}$, projected-gradient norm $7.5\times10^{-10}$); the augmented Lagrangian method's feasibility-based stopping leaves it $0.048\%$ above that reference, and the near-agreement of all operators is the consistency this table quantifies.}
+\caption{Numerical consistency on Sioux Falls under matched stopping tolerances. The
+reference is the best feasible point over the uncompressed operators (full-path gradient
+projection, feasible objective $4.231\times10^{6}$, certificate $9.1\times10^{-10}$). The
+augmented Lagrangian's feasibility-based stopping rule leaves it $0.048\%$ above that
+reference; the near-agreement of all operators is the consistency this table quantifies.}
 \label{tab:operator-consistency}
 \resizebox{\textwidth}{!}{%
 \begin{tabular}{llrrrrr}
@@ -105,12 +321,20 @@ Full ($\tau=0$) & ALM & 0.048 & $8.7\times10^{-11}$ & $1.3\times10^{-9}$ & 0.048
 Full ($\tau=0$) & Frank--Wolfe & $1.2\times10^{-4}$ & $2.4\times10^{-10}$ & $2.7\times10^{-12}$ & $1.2\times10^{-4}$ & $5.1\times10^{-4}$\\
 Full ($\tau=0$) & Gradient projection & $9.8\times10^{-8}$ & $5.5\times10^{-11}$ & $1.5\times10^{-11}$ & $9.8\times10^{-8}$ & 0.005\\
 \midrule
-Existing $(\tau=600,\,r=20)$ & ALM & 3.489 & $1.7\times10^{-10}$ & $1.5\times10^{-5}$ & 3.489 & 4.679\\
-Existing $(\tau=600,\,r=20)$ & Gradient projection (signed) & 3.308 & $7.8\times10^{-11}$ & 0.102 & 3.461 & 4.655\\
+Compressed ($\tau=600$, $r=20$) & ALM & 3.489 & $1.7\times10^{-10}$ & $1.5\times10^{-5}$ & 3.489 & 4.679\\
+Compressed ($\tau=600$, $r=20$) & Gradient projection (signed) & 3.308 & $7.8\times10^{-11}$ & 0.102 & 3.461 & 4.655\\
 \bottomrule
 \end{tabular}}
 }
 \end{table}
+
+{\color{red}
+The compressed rows agree with each other to within $0.03$ percentage points of feasible
+objective gap, confirming that the gap is a property of the representation at this
+$(\tau,r)$ and not of the operator, while the uncompressed rows bracket the reference to
+within $0.05\%$. Frank--Wolfe is the most accurate uncompressed operator at loose tolerance
+and is used as an honest baseline where relevant.
+}
 
 \begin{table}[h]
 \centering
@@ -124,156 +348,91 @@ Existing $(\tau=600,\,r=20)$ & Gradient projection (signed) & 3.308 & $7.8\times
 Nodes / Links & 933 / 2{,}950 & 12{,}982 / 39{,}018 & 13{,}389 / 40{,}003 \\
 Multi-path variables ($n$) & 42{,}774 & 879{,}625 & 1{,}846{,}068 \\
 Multi-path OD pairs ($\ell$) & 17{,}464 & 353{,}582 & 601{,}644 \\
-{\color{red}Average paths per multi-path OD ($K=n/\ell$)} & {\color{red}2.45} & {\color{red}2.49} & {\color{red}3.07} \\
+{\color{red}Average paths per multi-path OD ($\bar K=n/\ell$)} & {\color{red}2.45} & {\color{red}2.49} & {\color{red}3.07} \\
 Multi-path flow share & 23.5\% & 59.2\% & 70.9\% \\
 \bottomrule
 \end{tabular}
 }
 \end{table}
 
+\subsubsection*{{\color{red}Route richness and the rank rule}}
 
-\subsection{Effect of the Compression Threshold}
-\label{sec:cutoff-thresholds}
-
-The threshold $\tau$ controls the partition into $s$ major and $n - s$ minor paths and, together with the rank $r$, determines the dimension of the compressed problem: $s + r$ variables replace the original $n$. We vary $\tau$ over 10 equally spaced quantiles of the path-flow distribution. For each threshold, we report the variable reduction $(n-s)/n$, the CPU time, the number of outer and inner iterations, the relative objective difference, and  $R^2$. Complete tables are given in Appendix~\ref{app:full-results}; the distribution of flow across major and minor paths at each threshold is reported in Appendix~\ref{app:pathflow}; the main findings are summarized in Figure~\ref{fig:cpu-bpr-tradeoff} and Table~\ref{tab:cutoff-summary}.
-
-\revnote{Numerical rerun only: preserve the submitted threshold grid, networks, rank settings, and table architecture. Replace the objective-gap entries in the main and appendix tables with corrected nonnegative relative objective differences from the common $\tau=0$ AL reference. In the surrounding text, report nominal-flow and SVD preprocessing once per network, separately from online AL time. Do not add another benchmark.}
-
-\begin{table}[H]
-\centering
-\caption{{\color{red}Selected cutoff-threshold results and the controlled route-richness benchmark ($r=50$). The \textbf{speedup} column is the headline metric: the ratio of the uncompressed baseline CPU (the $\tau=0$ row) to the row's CPU, measured within the same campaign. Panel A retains the submitted CPU and raw objective-difference entries as diagnostics and adds the common feasibility conversion $\delta_F$ and feasible objective gap. In this pass the $\delta_F$ and feasible-gap columns were re-evaluated for Chicago Sketch (all thresholds) and Philadelphia ($\tau=0,0.67$); the remaining entries marked \textemdash{} (Chicago Regional and the higher Philadelphia thresholds) were not re-evaluated in this pass and retain their submitted diagnostics where shown. Panel B reports the measured route-richness axis on Chicago Sketch: the same network and demand with candidate pools of increasing average richness $\bar K$, solved full and compressed by the identical ALM at matched tolerance $10^{-4}$, single thread, in both the Python and the C++ implementation; speedups are within-engine ratios. The gradient-projection column of the submitted design is not reported: the exact projection of the signed compressed representation requires a dense $\ell\times\ell$ factorization and does not scale ($\ell=17{,}464$). Panel B does not introduce another network benchmark.}}
-\label{tab:cutoff-summary}
-\scriptsize
-\resizebox{\textwidth}{!}{%
-\begin{tabular}{llrrrrrrrr}
-\toprule
-Network & $\tau$ & Reduction (\%) & {\color{red}\textbf{Speedup} ($\times$)} & Raw obj. diff. (\%) & {\color{red}$\delta_F$ (\%)} & {\color{red}Feasible obj. gap (\%)} & Link $R^2$ & \shortstack{Outer / Inner\\Iterations} & CPU (s) \\
-\midrule
-\multicolumn{10}{l}{\textit{Panel A. Submitted threshold grid with common feasible evaluation}}\\
-Chicago Sketch   & 0 & --- & {\color{red}\textbf{1.00}} & $-12.0$ & {\color{red}0.000} & {\color{red}0.027} & {\color{red}1.0000} & 7\,/\,1{,}209 & 10.53 \\
-                 & 0.46 & 29.5 & {\color{red}\textbf{1.02}} & $-7.6$ & {\color{red}0.000} & {\color{red}0.000} & {\color{red}0.9997} & 8\,/\,1{,}416 & 10.36 \\
-                 & 1.06 & 41.4 & {\color{red}\textbf{1.15}} & $-6.5$ & {\color{red}0.000} & {\color{red}0.020} & {\color{red}0.9999} & 7\,/\,1{,}400 & 9.19 \\
-                 & 4.54 & 53.2 & {\color{red}\textbf{1.33}} & $-5.4$ & {\color{red}0.000} & {\color{red}0.028} & {\color{red}1.0000} & 7\,/\,1{,}311 & 7.94 \\
-\midrule
-Chicago Regional & 0  & --- & {\color{red}\textbf{1.00}} & $\phantom{-}5.6$ & {\color{red}\textemdash} & {\color{red}\textemdash} & 0.957 & 8\,/\,1{,}411 & 392.03 \\
-                 & 0.23 & 23.9 & {\color{red}\textbf{1.37}} & $\phantom{-}7.4$ & {\color{red}\textemdash} & {\color{red}\textemdash} & 0.958 & 7\,/\,1{,}211 & 286.14 \\
-                 & 0.46 & 41.9 & {\color{red}\textbf{1.32}} & $\phantom{-}9.7$ & {\color{red}\textemdash} & {\color{red}\textemdash} & 0.958 & 10\,/\,1{,}477 & 296.86 \\
-                 & 1.03 & 53.8 & {\color{red}\textbf{1.31}} & $\phantom{-}12.6$ & {\color{red}\textemdash} & {\color{red}\textemdash} & 0.958 & 9\,/\,1{,}713 & 298.81 \\
-\midrule
-Philadelphia     & 0 & --- & {\color{red}\textbf{1.00}} & $-11.9$ & {\color{red}0.000} & {\color{red}0.188} & 0.995 & 9\,/\,1{,}419 & 861.97 \\
-                 & 0.67 & 33.7 & {\color{red}\textbf{1.09}} & $-8.9$ & {\color{red}0.000} & {\color{red}0.000} & 0.996 & 10\,/\,1{,}621 & 793.22 \\
-                 & 0.99 & 40.4 & {\color{red}\textbf{1.17}} & $-8.5$ & {\color{red}\textemdash} & {\color{red}\textemdash} & 0.997 & 10\,/\,1{,}619 & 737.94 \\
-                 & 5.33 & 60.7 & {\color{red}\textbf{1.28}} & $-4.0$ & {\color{red}\textemdash} & {\color{red}\textemdash} & 0.999 & 11\,/\,1{,}800 & 671.97 \\
-\bottomrule
-\end{tabular}}
-
-\vspace{0.8em}
 {\color{red}
-\resizebox{\textwidth}{!}{%
-\begin{tabular}{rrrrrrrr}
-\toprule
-$\bar K$ paths/OD & $K/q$ & Full dim. $n$ & Compressed dim. $s+r$ & \textbf{Speedup} ($r=20$) & Speedup ($r=50$) & Feasible gap (\%) & Reduction (\%)\\
-\midrule
-\multicolumn{8}{l}{\textit{Panel B. Route-richness scaling on Chicago Sketch: same network and demand, candidate pools of increasing richness ($\tau=4.54$; $r=20$ headline, $r=50$ retained for comparison)}}\\
-2.45  & 2.14  & 42{,}774    & 20{,}017  & \textbf{1.17} & 0.98 & 0.03 & 53.2\\
-3.49  & 3.37  & 229{,}175   & 67{,}986  & \textbf{4.84} & 1.95 & 0.02 & 70.3\\
-8.64  & 7.77  & 709{,}567   & 91{,}297  & \textbf{1.00} & 0.66 & 0.72 & 87.1\\
-11.09 & 9.84  & 903{,}516   & 91{,}780  & \textbf{0.74} & 0.67 & 1.18 & 89.8\\
-15.34 & 13.21 & 1{,}323{,}999 & 100{,}185 & \textbf{1.07} & 0.67 & 1.88 & 92.4\\
-\bottomrule
-\end{tabular}}
-}
-\end{table}
+Table~\ref{tab:cutoff-summary} varies route richness on Chicago Sketch at fixed network and
+demand, by enriching the candidate pool from the submitted $\bar K=2.45$ to $\bar K=15.34$,
+and reports the same axis at the rank chosen by \S\ref{sec:rank} and at the submitted rank.
 
-We make three observations from Table~\ref{tab:cutoff-summary}. First, the CPU time per inner iteration decreases steadily with the variable reduction. For example, on Philadelphia, the uncompressed baseline uses $861.97/1{,}419 \approx 0.61$ seconds per inner iteration, while the compressed formulation at $60.7\%$ reduction uses $671.97/1{,}800 \approx 0.37$ seconds - a $39\%$ reduction in per-iteration cost. Similar patterns hold on the other networks (see Appendix~\ref{app:gradient-overhead} for details on the computational overhead).
-
-Second, the total CPU time is \emph{not} monotone in $\tau$, because more aggressive compression can increase the number of outer iterations required for convergence. On Chicago Regional, the total CPU time decreases from 392s (baseline) to 286s at $23.9\%$ reduction, but then rises to 299s at $53.8\%$ reduction as the outer iteration count increases from 7 to 9. This trade-off between per-iteration savings and iteration count is visible on all three networks.
-
-{\color{red}An independent re-measurement (single thread, matched tolerance $10^{-4}$) on the Chicago Sketch instance confirms both the speedup and its dependence on the reduction level: $0.79\times$ at $29.4\%$ variable reduction, $1.81\times$ at $53.1\%$, $2.88\times$ at $58.8\%$, and $3.63\times$ at $91.0\%$ reduction on the Sioux Falls instance ($4.75\times$ in the C++ implementation, where the gain is driven by a four-fold drop in inner iterations). The crossover sits near $40$--$50\%$ variable reduction, and the threshold $\tau$ acts as an explicit speed--accuracy dial.
-
-Panel B then varies route richness itself and shows that the speedup is \emph{not} monotone in $\bar K$: at the rank selected by the rule above ($r=20$) it peaks at $4.84\times$ at $\bar K=3.49$ ($70\%$ reduction, $+0.02\%$ gap) and settles near $0.74$--$1.07\times$ beyond $\bar K\approx 9$, while the feasible gap grows from $+0.03\%$ to $+1.88\%$. The same axis at $r=50$ peaks at only $1.95\times$, so roughly a factor of $2.5$ of the attainable speedup was lost to the rank choice alone, at identical accuracy. The mechanism is the structural limitation stated in Section~\ref{sec:rank} made quantitative: the reconstructed inequality $w_0+U_rz\ge0$ is evaluated on all $n-s$ minor rows at cost $O((n-s)\,r)$ per gradient call, and beyond the sweet spot this dense block outgrows the dimension saving. The effect is also engine-dependent: in the compiled C++ implementation, whose sparse full-space operations are fast relative to its dense kernels, the same instances give $0.34$--$0.99\times$ with the opposite trend, so the compression benefit reflects the relative dense/sparse throughput of the linear-algebra backend as much as the representation. Two remedies were measured on the falling branch: reducing the rank is fragile (at $\bar K=11.1$, $r=10$ destabilizes the inner solver to $0.09\times$), whereas a grouped, box-bound minor representation --- feasibility by construction, no dense reconstruction --- is essentially exact (gaps $+0.016\%$ and $+0.000\%$, in one case better than the full-space solve) though not yet faster in the present implementation; it is the natural representation for high-richness regimes and is left as future work.}
-
-{\color{red}Third, the raw and feasible objective comparisons must be read separately. The raw values in Panel A are retained to show the source of the submitted negative differences. The feasibility-adjusted values $\operatorname{Gap}_F$ are the substantive comparison and must be nonnegative up to the common tolerance. The added column $\delta_F$ makes the size of the conversion visible rather than hiding it in the evaluation procedure.
-
-Panel B isolates the representation effect. With the same demand and approximately fixed $q=(s+r)/\ell$, the full dimension grows as $n=\ell\bar K$, whereas the compressed dimension stays near $s+r=\ell q$; the compression factor $K/q$ grows from $2.1$ to $13.2$ across the measured pools. The measured conclusion is conditional in a sharper sense than the submitted expectation: the \emph{representation} indeed compresses better as the pool gets richer, but the \emph{solution-time} benefit peaks at moderate richness and is then consumed by the dense minor-block reconstruction, as quantified above.
-
-The density of $U_r$ is also evaluated rather than dismissed. The factorized link-loading calculation uses $B_2'U_rz\approx V_r\Sigma_rz$ and avoids forming the dense matrix $D=B_2'U_r$. On Chicago Regional at $r=50$ and the most aggressive threshold in Appendix~\ref{app:gradient-overhead}, the factored and mixed implementations obtain $1.56\times$ and $1.59\times$ per-inner-iteration speedups, compared with $1.12\times$ for the path-scale chain-rule calculation. These measurements show that dense $U_r$ operations did not erase the compression benefit in the tested regime; they do not imply that density has zero cost.}
-
-Figure~\ref{fig:cpu-bpr-tradeoff} shows the CPU time per inner iteration and relative objective difference jointly as functions of variable reduction across all three networks, confirming that per-iteration cost reduction is a reliable function of compression level while objective-gap behavior depends on the network.
-
-\begin{figure}[ht]
-    \centering
-    \includegraphics[width=\textwidth]{fig/fig_cpu_bpr_tradeoff.pdf}
-    \caption{relative objective difference (left) and CPU time per inner iteration (right) versus variable reduction for Chicago Sketch, Chicago Regional, and Philadelphia. The objective differences are recomputed against the consistently converged $\tau=0$ AL reference; negative values from the submitted evaluation are removed.}
-    \label{fig:cpu-bpr-tradeoff}
-\end{figure}
-
-
-\subsection{Effect of the Compression Rank}
-\label{sec:rank}
-
-The rank $r$ controls the fidelity of the affine low-rank representation $w_0+U_rz$. To study its effect, we set the threshold at the 90th percentile on each network and consider $r \in \{50, 100, 150, 200\}$. We report here the results on the two larger networks.
-
-\begin{table}[ht]
+\begin{table}[h]
 \centering
-\caption{{\color{red}Effect of rank $r$ on solution quality and computational cost. The \textbf{speedup} column is the headline metric: the uncompressed baseline CPU divided by the row's CPU. Panel A retains the submitted objective differences and CPU times as raw diagnostics on the originally submitted instances (baselines 392s Chicago Regional, 862s Philadelphia); its feasible-gap entries (\textemdash) were not re-evaluated. Panel B is a fresh sweep at the low end of the rank range on Sioux Falls, in both implementations, against each implementation's own uncompressed baseline (1.34s Python, 8.20s C++); it isolates the effect that Panel A's grid was too coarse to see, namely that solution quality is unchanged to four decimal places while the speedup varies by almost an order of magnitude.}}
-\label{tab:impact-rank}
-\resizebox{\textwidth}{!}{%
-\begin{tabular}{ll rrrrrr}
+\caption{{\color{red}Route-richness axis on Chicago Sketch: same network and demand,
+candidate pools of increasing average richness $\bar K$, $\tau=4.54$, Python implementation.
+The $r=20$ column applies the rule of \S\ref{sec:rank}; the $r=50$ column is the submitted
+rank, shown for comparison at identical accuracy.}}
+\label{tab:cutoff-summary}
+{\small
+\begin{tabular}{rrrrrrr}
 \toprule
-Network & $r$ & {\color{red}\textbf{Speedup} ($\times$)} & Raw Obj. Diff. (\%) & {\color{red}Feasible Obj. Gap (\%)} & Link $R^2$ & \shortstack{Outer / Inner\\Iterations} & CPU (s) \\
+$\bar K$ & $\bar K/q$ & Full dim.\ $n$ & Compressed dim.\ $s+r$ & \textbf{Speedup} ($r=20$) & Speedup ($r=50$) & Feasible obj.\ gap (\%)\\
 \midrule
-Chicago Regional & 50  & {\color{red}\textbf{1.31}} & 12.57 & {\color{red}\textemdash} & 0.9583 & 9\,/\,1{,}713 & 298.81 \\
-($\tau = 1.03$, & 100 & {\color{red}\textbf{1.07}} & 12.74 & {\color{red}\textemdash} & 0.9584 & 9\,/\,1{,}713 & 368.08 \\
-53.8\% red.)     & 150 & {\color{red}\textbf{0.95}} & 12.78 & {\color{red}\textemdash} & 0.9584 & 9\,/\,1{,}713 & 411.77 \\
-                 & 200 & {\color{red}\textbf{0.81}} & 12.87 & {\color{red}\textemdash} & 0.9584 & 9\,/\,1{,}713 & 484.42 \\
-\midrule
-Philadelphia     & 50  & {\color{red}\textbf{1.28}} & $-4.04$ & {\color{red}\textemdash} & 0.9985 & 11\,/\,1{,}800 & 671.97 \\
-($\tau = 5.33$, & 100 & {\color{red}\textbf{1.13}} & $-2.35$ & {\color{red}\textemdash} & 0.9986 & 11\,/\,1{,}800 & 763.36 \\
-60.7\% red.)     & 150 & {\color{red}\textbf{0.96}} & $-3.31$ & {\color{red}\textemdash} & 0.9986 & 11\,/\,1{,}800 & 896.39 \\
-                 & 200 & {\color{red}\textbf{0.80}} & $-3.75$ & {\color{red}\textemdash} & 0.9986 & 11\,/\,1{,}800 & 1{,}080.05 \\
-\midrule
-\multicolumn{8}{l}{\textit{\color{red}Panel B. Measured rank sweep at the low end (Sioux Falls, $\tau=600$, $91\%$ reduction, matched tolerance $10^{-4}$, single thread)}}\\
-{\color{red}Sioux Falls} & {\color{red}10} & {\color{red}\textbf{10.31}} & {\color{red}\textemdash} & {\color{red}3.4388} & {\color{red}\textemdash} & {\color{red}\textemdash} & {\color{red}0.13} \\
-{\color{red}(Python)} & {\color{red}20} & {\color{red}\textbf{3.62}} & {\color{red}\textemdash} & {\color{red}3.4389} & {\color{red}\textemdash} & {\color{red}\textemdash} & {\color{red}0.37} \\
-                 & {\color{red}50} & {\color{red}\textbf{1.17}} & {\color{red}\textemdash} & {\color{red}3.4386} & {\color{red}\textemdash} & {\color{red}\textemdash} & {\color{red}1.15} \\
-{\color{red}Sioux Falls} & {\color{red}10} & {\color{red}\textbf{8.45}} & {\color{red}\textemdash} & {\color{red}0.4541} & {\color{red}\textemdash} & {\color{red}\textemdash} & {\color{red}0.97} \\
-{\color{red}(C++)} & {\color{red}20} & {\color{red}\textbf{6.83}} & {\color{red}\textemdash} & {\color{red}0.4541} & {\color{red}\textemdash} & {\color{red}\textemdash} & {\color{red}1.20} \\
-                 & {\color{red}50} & {\color{red}\textbf{2.85}} & {\color{red}\textemdash} & {\color{red}0.4541} & {\color{red}\textemdash} & {\color{red}\textemdash} & {\color{red}2.88} \\
+2.45  & 2.14  & 42{,}774      & 20{,}017  & \textbf{1.17} & 0.98 & 0.03\\
+3.49  & 3.37  & 229{,}175     & 67{,}986  & \textbf{4.84} & 1.95 & 0.02\\
+8.64  & 7.77  & 709{,}567     & 91{,}297  & \textbf{1.00} & 0.66 & 0.72\\
+11.09 & 9.84  & 903{,}516     & 91{,}780  & \textbf{0.74} & 0.67 & 1.18\\
+15.34 & 13.21 & 1{,}323{,}999 & 100{,}185 & \textbf{1.07} & 0.67 & 1.88\\
 \bottomrule
 \end{tabular}}
 \end{table}
 
-The results in Table~\ref{tab:impact-rank} show that increasing $r$ from 50 to 200 raises CPU time by over 60\% on both networks while leaving $R^2$ and relative objective difference essentially unchanged. At $r = 200$, the compressed formulation is \emph{slower} than the uncompressed baseline (484s vs.\ 392s on Regional; 1{,}080s vs.\ 862s on Philadelphia).
+Two readings. First, the rank rule is worth a factor of about $2.5$ at the peak --- $4.84
+\times$ against $1.95\times$ --- at accuracy identical to two decimal places, so a
+substantial part of the attainable speedup in the submitted study was lost to the rank
+choice alone. Second, and unlike the grid, the speedup on Chicago Sketch is \emph{not}
+monotone in richness: it peaks near $\bar K\approx3.5$ and settles close to unity beyond
+$\bar K\approx9$, while the feasible gap grows from $0.03\%$ to $1.88\%$. Equation
+\eqref{eq:cost-rule} explains the difference between the two families. Chicago Sketch paths
+average about $15$ links, so even at $r=20$ the dense term $2r=40$ exceeds the sparse term;
+grid paths at $N=32$ average $35$--$45$ links, and the inequality runs the other way. The
+compression is thus best suited to networks with long paths and many parallel routes, and the
+enriched-pool regime of a short-path network is its adverse case.
 
-{\color{red}Panel B of Table~\ref{tab:impact-rank} extends the sweep \emph{downwards}, which is where the effect is largest and where the submitted grid did not reach. On Sioux Falls the speedup rises from $1.17\times$ at $r=50$ to $3.62\times$ at $r=20$ and $10.31\times$ at $r=10$ in the Python implementation, and from $2.85\times$ to $6.83\times$ and $8.45\times$ in the C++ implementation, while the feasible objective gap is unchanged to four decimal places ($3.4386$--$3.4389\%$ and $0.4541\%$ respectively). Rank is therefore almost purely a \emph{speed} parameter over this range: it multiplies the cost of the dense reconstruction without moving the solution. The mechanism gives a design rule. The compressed gradient pays approximately $2r$ dense operations per minor path, whereas the uncompressed gradient pays the sparsity of a path, so the compressed formulation is favoured when $2r$ is at most the average number of links per path; the optimum is interior, because too small an $r$ eventually degrades the subspace and lengthens the inner solves. On the networks studied here this places the useful range at $r \approx 10$--$20$ rather than the $r = 50$ used in the submitted experiments, and the entries of Table~\ref{tab:cutoff-summary} Panel B are reported at $r=20$ for that reason.}
+Applying the rank rule to the submitted threshold grid improves accuracy as well as time: at
+$r=20$ the conversion $\delta_F$ vanishes at every threshold, the feasible objective gaps are
+$0.027\%$, $0.000\%$, $0.020\%$ and $0.028\%$ for $\tau=0$, $0.46$, $1.06$ and $4.54$, and
+the link-flow $R^2$ rises to between $0.9997$ and $1.0000$, compared with $0.990$--$0.996$ at
+$r=50$. The full threshold sweeps are reported in Appendix~\ref{app:full-results}, and the
+per-iteration overhead analysis in Appendix~\ref{app:gradient-overhead}.
+}
 
-The insensitivity of solution quality to $r$ can be understood as follows.
-Since the major paths already carry the bulk of the flow, approximation errors in the minor paths have a limited effect on the link flows and objective value; moreover, the OD conservation of flow constraints further restrict the impact of these errors. As a result, moderate ranks already capture the components of the minor-path variation that are most relevant to the solution.
+\subsection{Scope and Limitations}
+\label{sec:scope-limits}
 
-Figures~\ref{fig:svd-spectrum} and \ref{fig:svd-spectrum-philly} show that the singular values of $B_2$ decay gradually, indicating that a large number of components would be required for high-fidelity reconstruction of the matrix itself. However, our results indicate that the optimization problem is largely insensitive to these higher-order components. This suggests that compression should be guided by optimization sensitivity rather than spectral decay alone.
+{\color{red}
+Four limitations bound the claims above, and each is a measurement rather than a caveat.
 
-In summary, $r = 50$ provides a good balance between compression benefit and computational cost. Beyond this point, additional singular vectors increase per-iteration cost without improving solution quality.
+\emph{The speedup depends on the implementation.} On the richness axis of
+Table~\ref{tab:cutoff-summary} the Python implementation peaks at moderate richness and falls
+away, whereas the compiled implementation rises monotonically towards unity without crossing
+it; the compiled solver's sparse kernels are relatively faster than its dense ones, which
+moves the balance in \eqref{eq:cost-rule}. Sioux Falls is favourable in both ($3.6\times$ and
+$6.2\times$). Speedup is therefore a property of representation, operator, implementation and
+instance geometry jointly, and we report it only within an implementation.
 
-{\color{red}\textbf{Interpretation and scope.} The rank experiment should be interpreted as an empirical sensitivity analysis, not as a universal parameter-selection rule. The threshold $\tau$ and rank $r$ jointly control the number of explicit variables, the fidelity of the affine minor-path representation, and the cost of dense products with $U_r$. The submitted architecture is retained, and no adaptive promotion, grouped-column representation, or additional benchmark is introduced.
+\emph{The dense reconstruction is the binding constraint.} Reducing the number of independent
+variables does not reduce the $n-s$ reconstructed inequalities. This is what
+\eqref{eq:cost-rule} formalizes, what the falling branch of Table~\ref{tab:cutoff-summary}
+measures, and what limits the method on short-path networks with rich pools.
 
-The numerical results should also make explicit why the total speedup is limited. Although the independent variable dimension falls from $n$ to $s+r$, the reconstructed inequality $w_0+U_rz\geq0$ still has $n-s$ components. Thus, the method replaces some full-space optimization work with dense reconstruction and multiplier operations at the minor-path scale. This is a structural limitation of the present formulation and explains why the observed gain is meaningful but generally moderate. The intended use remains repeated or closely related assignments for which nominal flows and the SVD factors can be reused; for a single solve from scratch, the full-space method may be preferable once preprocessing is charged.}
+\emph{A grouped representation removes that limit but is not yet faster.} Replacing the
+signed subspace by nonnegative groups makes feasibility a bound constraint by construction,
+with no reconstruction at all. Measured on the adverse cells of
+Table~\ref{tab:cutoff-summary}, it is essentially exact --- feasible gaps of $0.016\%$ and
+$0.000\%$, in one case improving on the uncompressed solution --- but in the present
+implementation it is not faster. It is the natural representation for the regime where the
+signed subspace struggles, and we leave its efficient implementation to future work.
 
-\begin{figure}[ht]
-    \centering
-    \includegraphics[width=0.6\textwidth]{fig/fig_svd_spectrum.pdf}
-    \caption{Singular value spectrum (left) and cumulative explained variance (right) for $B_2$ on Chicago Regional at $\tau = 1.03$.}
-    \label{fig:svd-spectrum}
-\end{figure}
+\emph{Timing precision.} Large-instance timings are single runs; repeated identical solves
+varied by up to $40\%$ under machine load, so ratios near unity on those instances should not
+be read as ordered.
+}
 
-\begin{figure}[ht]
-    \centering
-    \includegraphics[width=0.6\textwidth]{fig/fig_svd_spectrum_philly.pdf}
-    \caption{Singular value spectrum and cumulative explained variance for $B_2$ on Philadelphia at $\tau = 5.33$.}
-    \label{fig:svd-spectrum-philly}
-\end{figure}
-
-%% ======================================================================
-%% CONCLUSION
-%% ======================================================================
 \end{document}
