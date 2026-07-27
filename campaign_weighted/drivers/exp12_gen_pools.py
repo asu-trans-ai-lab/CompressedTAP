@@ -74,12 +74,17 @@ def main():
           f"{dem.volume.sum()/pd.read_csv(SRC/'demand.csv').volume.sum():.1%})",
           flush=True)
 
-    # ---- one deterministic deep KSP run
+    # ---- one deterministic deep KSP run (reused if already generated: the raw pool is
+    # deterministic, so re-filtering at a different ratio does not need a new run)
     raw = ds / f"pool_raw_K{a.K}.csv"
-    print(f"  running ksp_gen depth {a.K} (deterministic, penalty 1.4) ...", flush=True)
-    r = subprocess.run([str(C.KSP), str(ds), str(a.K), "1.4", str(raw)],
-                       capture_output=True, text=True, env=C.env())
-    assert r.returncode == 0, f"ksp_gen failed: {r.stderr[-400:]}"
+    if raw.exists() and raw.stat().st_size > 1 << 20:
+        print(f"  reusing existing raw pool {raw.name}", flush=True)
+    else:
+        print(f"  running ksp_gen depth {a.K} (deterministic, penalty 1.4) ...",
+              flush=True)
+        r = subprocess.run([str(C.KSP), str(ds), str(a.K), "1.4", str(raw)],
+                           capture_output=True, text=True, env=C.env())
+        assert r.returncode == 0, f"ksp_gen failed: {r.stderr[-400:]}"
     df = pd.read_csv(raw)
     print(f"  raw pool: {len(df):,} paths", flush=True)
 
