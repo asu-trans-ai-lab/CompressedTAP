@@ -176,8 +176,50 @@ rather than decoding exp08's checkpoints; reproduction G values match exp08 to ~
 `config.py`. exp08 checkpoints (ck_*.npz) live under %TMP%/lockstep/ and are valid only
 within the process that wrote them.
 
-## 8. Status of the generalization check
+## 8. Generalization check: K15 (COMPLETE, replicates)
 
-C3/C4 on Chicago Sketch K15 (d05, seed 100) launched 2026-07-27; result to be appended to
-`results/exp09_controls_K15_d05.csv`. The scenario sweep (exp07 d10/c05/c10) is
-deliberately NOT being restarted.
+C3/C4 on Chicago Sketch K15 (d05, seed 100, r = 6; `results/exp09_controls_K15_d05.csv`):
+compressed plateau G ~ 0.0162 by k = 4; escape step from the identical iterate and ALM
+state: G 0.01618 -> 0.00415 in one step (124.5 s) while the paired compressed step does
+nothing (0.01643, 35.4 s); minor-block gradient capture eta = 1.58% (vs 1.26% on K10).
+The decisive controls replicate on a second pool with the same mechanism and magnitudes.
+The scenario sweep (exp07 d10/c05/c10) was deliberately NOT restarted.
+
+## 9. Experiment A: structured representations at the same plateau (exp10)
+
+All candidates anchored at the identical K10-d05 k=4 plateau point (w0' = x_C, z = 0),
+same (lam, rho), mu restarted at 0 for every representation including the global baseline;
+one ALM outer step each; `results/exp10_structured_K10_d05.csv`. G_before = 0.01366.
+
+| representation | R | eta_minor | G after 1 step | cpu (s) | decode (s) | frac(u<=0) |
+|---|---:|---:|---:|---:|---:|---:|
+| global r=6 (incumbent) | 6 | 1.27% | 0.01094 | 28.5 | 17.1 | 0.53 |
+| origin blocks, light | 1,081 | 4.10% | **0.00819** | **28.5** | 17.2 | 0.77 |
+| origin blocks, medium | 2,792 | 9.07% | 0.00776 | 34.5 | 20.4 | 0.78 |
+| odx1 (1 exchange atom/OD) | 69,707 | 5.06% | 0.01167 | 33.8 | 17.2 | 0.38 |
+| odxfull (within-OD zero-sum) | 731,612 | **98.48%** | 0.00583 | 156.3 | 45.1 | 0.82 |
+| full-space escape (reference) | 903,516 | 100% | 0.00277 | 97.3 | -- | -- |
+
+Findings:
+1. **OD-locality contains essentially all of the missing gradient**: the within-OD
+   zero-sum minor subspace captures 98.48% of the minor-block equilibrium gradient at the
+   plateau -- major<->minor exchange accounts for only ~1.5%. The floor is cross-OD
+   coupling, as hypothesised.
+2. **Origin blocks strictly dominate the global basis on the one-step frontier**: at
+   IDENTICAL cpu (28.5 s), origin-light doubles the one-step gap reduction and lands below
+   the global representation's converged r=20 floor in a single step. Capture rises
+   3-7x (1.27% -> 4.1% -> 9.1%) with block granularity.
+3. **Exchange-atom placement matters more than count**: one atom per OD between the two
+   largest-flow minors (R = 69,707) underperforms 1,081 origin-SVD dims -- the gradient
+   mostly wants other pairs. Atom selection should be gradient- or cost-driven, not
+   flow-rank-driven.
+4. Caveats: one step only (floor REMOVAL requires a trajectory run); every candidate hit
+   the 200-inner-iteration cap, which systematically penalises large-R representations;
+   single instance (K10-d05).
+
+Interpretation per the pre-registered outcomes: origin-based blocks substantially improve
+gradient capture and the accuracy-per-CPU frontier, and the OD-local benchmark proves
+locality removes the span deficiency -- the failure was caused by global coupling across
+unrelated ODs. The boundary-activity columns (0.5-0.8 of decoded minors at zero after one
+step, all representations) mark navigation of the nonnegativity boundary as the next
+binding constraint after span alignment.
