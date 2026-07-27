@@ -1,0 +1,5 @@
+delta,gap_vs_best_pct,kind,method,obj,pool,pool_gap,reduction_pct,scenario,speedup_vs_cold_matched,speedup_vs_warm_matched,t_at_target_s,t_prep_s,t_s,target_pool_gap
+,,,full-cold,16972388.535,K10,0.015161,89.8,baseline,,,,3.0,298.4,
+0.05,0.4923,demand,full-cold,17007962.3691,K10,0.018951,,d05,,,12.1,,288.2,0.018951
+0.05,0.1464,demand,full-warm,16949422.7627,K10,0.013878,,d05,,,0.3,,293.3,0.018951
+0.05,0.0,demand,compressed-reuse,16924646.0879,K10,0.015838,,d05,0.58,0.02,20.9,,131.7,0.018951
