@@ -1,0 +1,4 @@
+gap_pct,majors,minors,note,r,reduction_pct,speedup,t_s,tau
+,278018,1746507,skipped: reduction too low,8,86.3,,,3.0
+,271554,1752971,skipped: reduction too low,8,86.6,,,8.0
+,270716,1753809,skipped: reduction too low,8,86.6,,,20.0
