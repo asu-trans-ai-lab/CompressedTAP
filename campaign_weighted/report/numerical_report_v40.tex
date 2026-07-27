@@ -1,0 +1,329 @@
+\documentclass[11pt]{article}
+\usepackage[margin=1in]{geometry}
+\usepackage{amsmath,amssymb,bm}
+\usepackage{booktabs}
+\usepackage{xcolor}
+\usepackage[colorlinks=true,linkcolor=blue,citecolor=blue]{hyperref}
+\usepackage{caption}
+\captionsetup{font=small}
+
+\newcommand{\docver}{v4.0}
+\newif\ifshownotes \shownotestrue
+\newcommand{\conote}[1]{\ifshownotes{\color{red}\small\textsf{[Note to co-authors: #1]}}\fi}
+\newcommand{\Kbar}{\bar K}
+\newcommand{\R}{\mathbb{R}}
+
+\title{Compressed Traffic Assignment: Numerical Report \docver\\
+\large Certified results of the lockstep campaign (2026-07-25 -- 2026-07-27)}
+\author{Campaign record --- \texttt{campaign\_weighted/}, branch \texttt{version\_3}}
+\date{27 July 2026}
+
+\begin{document}
+\maketitle
+
+\noindent\fbox{\parbox{\dimexpr\textwidth-2\fboxsep-2\fboxrule}{%
+\textbf{Headline, Chicago Sketch (path-rich regime).} On the nested-pool ladder with a
+fixed set of 19{,}112 OD pairs (94.2\% of demand) and matched ALM operators, compression
+with a rank-6 backbone and at most 500 dynamically repriced OD exchange atoms attains
+\[
+S(G^\ast{=}0.015)=\mathbf{1.87\times}\quad(\Kbar=31.6,\; n=603{,}232),\qquad
+S(G^\ast{=}0.015)=1.46\times\quad(\Kbar=25.4),
+\]
+at \emph{matched time-to-accuracy against a converging full-space baseline}. The
+advantage rises monotonically with route richness and with target tightness inside the
+reachable band; below $\Kbar\approx15$ compression does not pay
+($S=0.81$ at $\Kbar=14.6$; does not reach the targets at $\Kbar=7.7$).}}
+
+\medskip
+\noindent\fbox{\parbox{\dimexpr\textwidth-2\fboxsep-2\fboxrule}{%
+\textbf{Headline, Chicago Regional (structural negative, explained).} The E0 pool has
+$\Kbar=7.48$, so the reduction ceiling \eqref{eq:ceiling} caps compression at
+$1-1/7.48=86.6\%$ --- exactly the measured saturation value ($84.0\to86.3\to86.6\to86.6\%$
+for $\tau=1.03,3,8,20$; at $\tau{=}20$ the split retains 270{,}716 majors against
+270{,}598 OD pairs, i.e.\ one path per OD, the hard floor). The compiled solver paid only
+above ${\sim}90\%$ reduction, hence Regional \emph{cannot} pay with this pool for any
+$(\tau,r)$: the certified C++ bound is $S<0.58\times$. The negative is a property of the
+pool's richness, not of the method or its tuning, and is predictable in advance from two
+integers ($n$ and $\ell$).}}
+
+\conote{Everything in this report traces to CSVs in \texttt{campaign\_weighted/results/}
+(commits \texttt{f6deb4e}, \texttt{4612cae}, \texttt{a25b5a4}, \texttt{a01413d},
+\texttt{165e816}). All timings single-process, single-thread. The old ``3.26$\times$ with
+essentially zero accuracy loss'' phrasing is withdrawn; see \S\ref{sec:requal}.}
+
+\section{Model, algorithms, and metrics}
+
+\paragraph{Assignment model.} Path flows $x\in\R^n_{\ge0}$ over a pool of $n$ paths and
+$\ell$ OD pairs, incidence $B\in\{0,1\}^{n\times m}$, OD aggregation
+$A\in\{0,1\}^{\ell\times n}$, demand $d\in\R^\ell$, BPR link costs $t(v)$,
+$v=v_0+B^\top x$. Beckmann objective
+\begin{equation}
+Z(x)=\sum_{a=1}^{m}\int_0^{v_a} t_a(s)\,ds .
+\end{equation}
+
+\paragraph{Operator (matched on both sides).} SPG-ALM: at outer iteration $k$, minimise
+over the representation's variables
+\begin{equation}
+\mathcal L_\rho(x,\lambda)=Z(x)+\lambda^\top(Ax-d)+\tfrac{\rho}{2}\|Ax-d\|_2^2,
+\qquad \lambda\leftarrow\lambda+\rho\,(Ax-d),
+\label{eq:alm}
+\end{equation}
+inner solver L-BFGS-B (maxiter 200, gtol $10^{-5}$), $\rho_0=100$ doubled when the
+constraint residual fails to contract by $4\times$, identical schedules in every arm.
+
+\paragraph{Compressed representation (incumbent).} Major/minor split at threshold $\tau$
+(every OD keeps its maximum-flow path explicit); minors are decoded through a global
+signed basis with an affine anchor:
+\begin{equation}
+x_{\mathcal M}=w_0+U_r z,\qquad \text{feasibility } w_0+U_r z\ge 0
+\text{ (ALM hinge, multiplier }\mu\text{)} ,
+\label{eq:decoder}
+\end{equation}
+$U_r$ = leading left singular vectors of $S B_2$, $S=\operatorname{diag}(\sqrt{w_0}+\varepsilon)$
+(flow-weighted \emph{row-scaling heuristic}; it is \emph{not} the minimiser of the
+flow-weighted reconstruction loss, which is $\operatorname{span}(S^{-1}\tilde U_r)$ ---
+verified 2026-07-25 and stated wherever the basis is described).
+
+\paragraph{Hybrid global--local representation (new).} A low-rank backbone plus sparse,
+OD-local, \emph{coefficient-bounded} route-exchange atoms on an active set $\mathcal A$:
+\begin{equation}
+x_{\mathcal M}=w_0+U_G z_G+\!\!\sum_{q\in\mathcal A}\!\alpha_q a_q,\qquad
+a_q=\tfrac{1}{\sqrt2}\bigl(e_{p_q^{\mathrm{low}}}-e_{p_q^{\mathrm{high}}}\bigr),\qquad
+\mathbf 1^\top a_q=0 ,
+\label{eq:hybrid}
+\end{equation}
+where $p_q^{\mathrm{low}}/p_q^{\mathrm{high}}$ are the cheapest/costliest \emph{used}
+minors ($x>\varepsilon$) of OD $q$ at current costs, and
+\begin{equation}
+-\sqrt2\,w_0[p_q^{\mathrm{low}}]\;\le\;\alpha_q\;\le\;\sqrt2\,w_0[p_q^{\mathrm{high}}]
+\label{eq:bounds}
+\end{equation}
+so the atom part alone cannot violate nonnegativity: atoms encode \emph{flow exchange},
+not signed reconstruction. The active set is chosen by per-OD disequilibrium
+\begin{equation}
+G_q=\sum_{p\in P_q}x_p\,(c_p-c_q^{\min}),\qquad
+\mathcal A=\{q: G_q\text{ among the top }B\} ,
+\label{eq:Gq}
+\end{equation}
+and, in the \emph{dynamic} variant, the anchor $w_0$, the costs, $G_q$ and the atom pairs
+are re-computed every outer iteration (equilibrium-error-guided column generation in the
+tangent space); $\lambda,\rho$ carry across repricings.
+
+\paragraph{Independent evaluation (the third evaluator).} Every claim uses one
+independently implemented full-space scorer, applied to the raw decoded flows of
+\emph{both} solvers --- never a solver's internal gap:
+\begin{align}
+G(x)&=\frac{\sum_q\sum_{p\in P_q}x_p\,(c_p-c_q^{\min})}{\sum_q d_q\,c_q^{\min}}
+&&\text{(common equilibrium gap, pool-min costs)},\label{eq:G}\\
+r_{\mathrm{OD}}&=\frac{\sum_q\bigl|\sum_{p\in P_q}x_p-d_q\bigr|}{\sum_q d_q},
+\qquad
+r_{\mathrm{OD},\max}=\max_q\frac{\bigl|\sum_{p}x_p-d_q\bigr|}{\max(d_q,\epsilon)} ,\\
+r_{\mathrm{PG}}&=\frac{\bigl\|x-\Pi_{\mathcal X}\bigl(x-\alpha\nabla Z(x)\bigr)\bigr\|_2}
+{\max(1,\|x\|_2)},\qquad \alpha=10^{-2}
+&&\text{($\Pi_{\mathcal X}$: per-OD Euclidean simplex proj.)}.
+\end{align}
+Speed claims are \emph{time-to-target}
+\begin{equation}
+S(G^\ast)=\frac{T_{\mathrm{full}}(G^\ast)}{T_{\mathrm{comp}}(G^\ast)} ,
+\label{eq:S}
+\end{equation}
+never final wall time after a solver has stalled. Repeated-scenario economics use
+$H^\ast=\lceil T_{\mathrm{prep}}/(T_{\mathrm{warm}}-T_{\mathrm{comp}})\rceil$.
+
+\section{Result 1: the reduction ceiling}\label{sec:ceiling}
+
+Every OD pair must keep at least one explicit path, so route richness
+$\Kbar=n/\ell$ caps the dimensional reduction \emph{before any tuning}:
+\begin{equation}
+\text{reduction}\;\le\;\frac{n-\ell-r}{n}\;\approx\;1-\frac{1}{\Kbar}.
+\label{eq:ceiling}
+\end{equation}
+
+\begin{table}[h]\centering\small
+\caption{The ceiling binds everywhere (exp06; \texttt{exp06\_regional\_tau.csv}).}
+\begin{tabular}{lrrrr}
+\toprule
+instance & $\Kbar$ & ceiling $1{-}1/\Kbar$ & measured reduction & note\\
+\midrule
+Regional-E0 ($\tau{=}1.03$) & 7.48 & 86.6\% & 84.0\% & \\
+Regional-E0 ($\tau{=}3$)    & 7.48 & 86.6\% & 86.3\% & \\
+Regional-E0 ($\tau{=}8,20$) & 7.48 & 86.6\% & \textbf{86.6\%} & saturated: 270{,}716 majors vs 270{,}598 ODs\\
+Sketch-K10 & 11.09 & 91.0\% & 89.8\% & \\
+Sketch-K15 & 15.34 & 93.5\% & 92.4\% & \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\noindent The compiled solver paid only above ${\sim}90\%$ reduction; Regional-E0 cannot
+reach it, hence the certified bound $S<0.58\times$ (full C++ solve 1085.3\,s, objective
+18{,}854{,}545.32 reproduced bit-for-bit; compressed stopped at $>$1860\,s). The old
+Regional negative is thereby \emph{explained and predictable}: a network needs
+$\Kbar\gtrsim10$--$15$ before compiled compression can be expected to pay.
+
+\section{Result 2: the representation floor}\label{sec:floor}
+
+\paragraph{Instrument.} Full and compressed ALM advance \emph{one outer iteration at a
+time} from a byte-identical iteration 0 ($w_0=x^0_{\mathcal M}$, $z^0=0$,
+$y^0=x^0_{\mathrm{maj}}$; identity gate: all differences exactly $0.0$), scored each
+step by \eqref{eq:G}--\eqref{eq:S} (exp08, Chicago Sketch K10, scenario d05 = demand
+$\times(1+U(-0.05,0.05))$, seed 100, $r=6$).
+
+\begin{table}[h]\centering\small
+\caption{Ten synchronized outer iterations (abridged; \texttt{exp08\_lockstep\_K10\_d05\_r6.csv}).}
+\begin{tabular}{crrrrrr}
+\toprule
+$k$ & $G_{\mathrm{full}}$ & $G_{\mathrm{comp}}$ & $r_{\mathrm{PG,full}}$ &
+$r_{\mathrm{PG,comp}}$ & cpu$_{\mathrm{full}}$ (s) & cpu$_{\mathrm{comp}}$ (s)\\
+\midrule
+1  & 0.00503 & 0.01563 & 0.00278 & 0.00275 & 41.5 & 15.6\\
+4  & 0.00110 & 0.01358 & 0.00032 & 0.00105 & 37.5 & 14.2\\
+7  & 0.00074 & 0.01370 & 0.00009 & 0.00103 & 39.6 & 21.3\\
+10 & \textbf{0.00069} & \textbf{0.01338} & 0.00003 & 0.00102 & 50.8 & 1.3\\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\noindent OD feasibility is comparable throughout; the divergence is purely equilibrium
+quality. Kernel accounting: the full side spends 96\% of CPU in gradient + link
+aggregation; the compressed side spends \textbf{74\%} in the dense
+$O(n_{\mathcal M} r)$ decode + hinge; the OD loop is 3--4\% on both sides. A $10\times$
+variable reduction delivers only $2.4\times$ per-outer cost.
+
+\paragraph{Five controls (exp09), branched from the same $k{=}4$ state.}
+\begin{itemize}\itemsep2pt
+\item[C1] \emph{Shared duals} (both directions): full escapes under either side's
+$\lambda$ ($G=0.00091/0.00092$); compressed stays at its plateau ($0.0132/0.0138$).
+Multiplier drift eliminated.
+\item[C2] \emph{Hinge accounting}: at the plateau the iterate sits on the box boundary
+($\min u=-1.1\times10^{-2}$, $H=4.7\times10^3$, $\|\nabla_z H\|=2.3\times10^3$);
+removing the hinge yields $G=2.22$. The hinge is \emph{necessary but not the root
+cause}: the feasible set is $\operatorname{span}(U)\cap\{w_0+Uz\ge0\}$.
+\item[C3] \emph{Gradient geometry}: with $g_T$ = per-OD-centred path costs,
+$\eta_{\mathrm{captured}}=0.134$, $\eta_{\mathrm{missing}}=0.866$; 87.7\% of
+$\|g_T\|^2$ lies in the minor block, of which $\operatorname{span}(U_6)$ captures
+\textbf{1.26\%} (measured at the $r{=}6$ plateau; not extrapolated to other ranks).
+\item[C4] \emph{Full-space escape} from the identical iterate and ALM state:
+$G\,0.0135\to0.00277$ in \emph{one} step, while a paired compressed step does nothing
+(0.0138). Decisive.
+\item[C5] \emph{Rank replay}: plateaus $0.0134/0.0135/0.0127$ for $r=6/10/20$ --- the
+limitation persists over the tested rank range.
+\end{itemize}
+
+\begin{equation}
+\boxed{\;G_{\min}(U,r)\approx1.3\times10^{-2}\ \text{for the tested global-SVD
+representation, }r\in\{6,10,20\}\;}
+\label{eq:floor}
+\end{equation}
+
+\noindent\emph{Replication:} on K15-d05 the plateau is $0.0162$, the escape step gives
+$0.01618\to0.00415$, and $\eta$(minor) $=1.58\%$ --- same mechanism, second pool.
+\emph{Mechanism (exact wording):} the global latent basis poorly aligns with the
+remaining OD-specific equilibrium directions, and the small aligned component is further
+restricted by the nonnegativity boundary of the decoded minor flows.
+
+\section{Result 3: structured representations and dynamic atoms}\label{sec:atoms}
+
+\begin{table}[h]\centering\small
+\caption{One ALM step from the identical K10-d05 plateau point, same $(\lambda,\rho)$
+(exp10); then full trajectories from iteration 0 (exp10b/exp11). $G_0=0.01366$.}
+\begin{tabular}{lrrrrr}
+\toprule
+representation & $R$ & $\eta_{\text{minor}}$ & $G$ after 1 step & cpu (s) & trajectory plateau\\
+\midrule
+global $r{=}6$ (incumbent) & 6 & 1.27\% & 0.01094 & 28.5 & 0.01352\\
+origin blocks, light & 1{,}081 & 4.10\% & 0.00819 & 28.5 & 0.01132\\
+origin blocks, medium & 2{,}792 & 9.07\% & 0.00776 & 34.5 & 0.01123\\
+odx1 (flow-ranked atoms) & 69{,}707 & 5.06\% & 0.01167 & 33.8 & ---\\
+odx1g (cost-selected, static) & 69{,}707 & --- & --- & --- & 0.01169 (converges cleanly)\\
+odxfull (within-OD zero-sum) & 731{,}612 & \textbf{98.48\%} & 0.00583 & 156.3 & ---\\
+full-space escape (reference) & 903{,}516 & 100\% & 0.00277 & 97.3 & 0.00069 ($k{=}10$)\\
+\midrule
+static hybrid atoms, $B{\le}5000$ & \multicolumn{2}{r}{(exp11)} & --- & --- & 0.0103--0.0112\\
+\textbf{dynamic repricing}, $B{=}2000$ & \multicolumn{2}{r}{$\sim$1{,}300 active} & --- & --- &
+\textbf{0.00407, still descending}\\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\noindent Three certified statements. (i)~\emph{OD-locality contains essentially all the
+missing gradient}: the within-OD zero-sum minor subspace captures 98.48\% (major--minor
+exchange is only $\sim$1.5\%): the floor is cross-OD coupling. (ii)~\emph{No cheap static
+locality removes the floor}: origin blocks plateau at $\sim$0.0113 regardless of budget;
+statically priced atoms at any $B$ plateau at 0.0103--0.0112. (iii)~\emph{Dynamic
+repricing is the mechanism}: rebuilding cost-selected, coefficient-bounded atoms
+\eqref{eq:hybrid}--\eqref{eq:Gq} each outer reaches $G=0.00407$ (still descending at the
+outer budget), passing $10^{-2}$ at 40\,s and $5\times10^{-3}$ at 103\,s, with the active
+set self-pruning ($1{,}480\to1{,}158$) as ODs equilibrate. Stale atoms, not atoms, were
+weak. Exchange atoms also \emph{converge cleanly} (inner iterations collapse to single
+digits; no boundary churn), unlike every signed-basis arm.
+
+\section{Result 4: the break-even transition (Chicago Sketch ladder)}\label{sec:ladder}
+
+Fixed top-20{,}000 ODs by demand (94.2\% of total volume; 19{,}112 after singleton
+removal), nested penalty-KSP pools $P_8\subset P_{16}\subset P_{32}\subset P_{64}$
+(dedupe; length filter $c_p\le2.5\,c_q^{SP}$ --- the topology supports $\Kbar$ up to
+$\sim$31), matched ALM pairs, pre-registered $G^\ast\in\{0.020,0.015\}$
+(\texttt{exp12\_extreme\_M20000.csv}).
+
+\begin{table}[h]\centering\small
+\caption{Time-to-target and speedup \eqref{eq:S}. Compressed arm: global $r{=}6$
+backbone $+\,B\le500$ dynamically repriced atoms (repriced on stall).}
+\begin{tabular}{lrrrrrrrr}
+\toprule
+pool & $\Kbar$ & $n$ & $T_{\mathrm{full}}(.020)$ & $T_{\mathrm{comp}}(.020)$ &
+$S(.020)$ & $T_{\mathrm{full}}(.015)$ & $T_{\mathrm{comp}}(.015)$ & $S(.015)$\\
+\midrule
+X8  & 7.7  & 147{,}088 & 11.0\,s & DNS & --- & 20.9\,s & DNS & ---\\
+X16 & 14.6 & 278{,}511 & 35.8\,s & 44.0\,s & 0.81 & 35.8\,s & DNS & ---\\
+X32 & 25.4 & 484{,}580 & 59.6\,s & 44.7\,s & \textbf{1.33} & 86.3\,s & 59.3\,s & \textbf{1.46}\\
+X64 & 31.6 & 603{,}232 & 72.7\,s & 57.0\,s & \textbf{1.28} & 106.4\,s & 57.0\,s & \textbf{1.87}\\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\noindent $S(G^\ast{=}0.015)$ is \emph{monotone in richness} (DNS $\to$ DNS $\to$ 1.46
+$\to$ 1.87): the advantage grows with the target inside the reachable band. Caveats,
+stated wherever these numbers appear: the $\tau$ split leaves 25\% majors (75\%
+reduction, not the $\sim$98\% extreme configuration --- a tighter split is the obvious
+next lever and these $S$ are likely understatements); Python engine; outer-granularity
+timing; one seed; controlled demand subset.
+
+\section{Requalified claims and retired claims}\label{sec:requal}
+
+\begin{itemize}\itemsep2pt
+\item \textbf{Say:} ``On Chicago Sketch K15, the compiled compressed solver achieved
+$3.26\times$ (wall time) with a 0.046\% Beckmann-objective difference \emph{in the
+tested moderate-equilibrium-accuracy regime}; the lockstep evaluator subsequently showed
+both sides of that comparison operated at common gap $G\gtrsim0.015$.''
+\textbf{Do not say:} ``$3.26\times$ with essentially zero accuracy loss.''
+\item \textbf{Say:} ``Chicago Regional cannot pay with the E0 pool: $\Kbar=7.48$ caps
+reduction at 86.6\% \eqref{eq:ceiling}, below the $\sim$90\% paying regime; certified
+bound $S<0.58\times$.'' \textbf{Do not} present Regional as a tuning failure.
+\item \textbf{Say:} ``Compression pays above a measurable richness threshold
+($\Kbar\approx15$--$25$ here) at moderate accuracy targets, with $S(0.015)$ up to
+$1.87\times$, and provably cannot pay below the richness ceiling or beneath the
+representation floor \eqref{eq:floor}.''
+\item Repeated scenarios (grid, Python): compressed 14.1\,s vs 50.1\,s warm-started full
+($3.55\times$), $H^\ast=2$; on K10 in C++ the warm-started full solver reaches its own
+floor almost instantly, so reuse claims are engine- and instance-specific.
+\item The flow-weighted basis is a row-scaling heuristic (kept because it improves the
+solved feasible gap in 27/34 paired comparisons), not reconstruction-optimal.
+\item Timing noise floor $1.45\times$: no smaller wall-time ratio is claimed anywhere.
+\end{itemize}
+
+\section*{Reproduction}
+\small
+\begin{verbatim}
+# floor + controls              python drivers/exp08_lockstep.py --case K10 --scenario d05
+                                python drivers/exp09_controls.py --case K10 --scenario d05
+# structured representations    python drivers/exp10_structured.py ; exp10b_trajectory.py
+# hybrid + dynamic repricing    python drivers/exp11_hybrid.py
+# break-even ladder             python drivers/exp12_gen_pools.py --M 20000 --K 64 --ratio 2.5
+                                python drivers/exp12_extreme.py --M 20000
+\end{verbatim}
+Commits (branch \texttt{version\_3}): \texttt{f6deb4e}, \texttt{4612cae},
+\texttt{a25b5a4}, \texttt{a01413d}, \texttt{165e816}. Determinism caveat: ARPACK start
+vectors make $U$ reproducible only up to column signs across processes; every controls
+driver therefore re-derives its branch state in-process.
+
+\end{document}
