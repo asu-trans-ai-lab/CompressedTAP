@@ -33,7 +33,8 @@ import common as K
 import config as C
 
 SCRATCH = Path(os.environ.get("TMP", "/tmp")) / "extreme_case"
-SRC = C.DATA / "03_chicago_sketch"
+SRCS = {"sketch": C.DATA / "03_chicago_sketch",
+        "regional": C.DATA / "04_chicago_regional"}
 DEPTHS = [8, 16, 32, 64]
 
 
@@ -52,14 +53,19 @@ def logit_per_od(df, dvol, theta_frac=0.15):
 
 def main():
     ap = argparse.ArgumentParser()
+    ap.add_argument("--net", default="sketch", choices=list(SRCS))
     ap.add_argument("--M", type=int, default=20000)
     ap.add_argument("--K", type=int, default=64)
-    ap.add_argument("--ratio", type=float, default=1.5)
+    ap.add_argument("--ratio", type=float, default=2.5)
     a = ap.parse_args()
-    ds = SCRATCH / f"M{a.M}"
+    SRC = SRCS[a.net]
+    ds = SCRATCH / a.net / f"M{a.M}"
+    if a.net == "sketch" and not (ds / "node.csv").exists() \
+            and (SCRATCH / f"M{a.M}" / "node.csv").exists():
+        ds = SCRATCH / f"M{a.M}"          # pre---net layout, keep the sketch data in place
     ds.mkdir(parents=True, exist_ok=True)
-    K.banner(f"exp12 pool generation: top {a.M:,} ODs, nested depths {DEPTHS}, "
-             f"ratio<={a.ratio}")
+    K.banner(f"exp12 pool generation [{a.net}]: top {a.M:,} ODs, "
+             f"nested depths {DEPTHS}, ratio<={a.ratio}")
 
     # ---- dataset: full topology, top-M demand only
     for f in ("node.csv", "link.csv"):

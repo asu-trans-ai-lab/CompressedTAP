@@ -68,7 +68,7 @@ def run_depth(depth, ds, a, rows):
         if extra:
             row.update(extra)
         rows.append(row)
-        K.write(f"exp12_extreme_M{a.M}", rows)
+        K.write(f"exp12_extreme_{a.tag}", rows)
 
     hit = {arm: {t: None for t in TARGETS} for arm in ("full", "comp")}
 
@@ -156,11 +156,12 @@ def run_depth(depth, ds, a, rows):
         print(f"  X{depth}  G*={t}:  T_full={tf}  T_comp={tc}  "
               f"S={line[f'S@{t}']}", flush=True)
     rows.append(line)
-    K.write(f"exp12_extreme_M{a.M}", rows)
+    K.write(f"exp12_extreme_{a.tag}", rows)
 
 
 def main():
     ap = argparse.ArgumentParser()
+    ap.add_argument("--net", default="sketch", choices=["sketch", "regional"])
     ap.add_argument("--M", type=int, default=20000)
     ap.add_argument("--depths", default="8,16,32,64")
     ap.add_argument("--outers", type=int, default=12)
@@ -169,12 +170,15 @@ def main():
     ap.add_argument("--inner", type=int, default=200)
     ap.add_argument("--stall-frac", type=float, default=0.10)
     a = ap.parse_args()
-    ds = SCRATCH / f"M{a.M}"
+    ds = SCRATCH / a.net / f"M{a.M}"
+    if a.net == "sketch" and not (ds / "pool_X8.csv").exists():
+        ds = SCRATCH / f"M{a.M}"          # pre---net layout
+    a.tag = f"{a.net}_M{a.M}"
     assert (ds / "pool_X8.csv").exists(), "run exp12_gen_pools.py first"
     rows = []
     for depth in [int(x) for x in a.depths.split(",")]:
         run_depth(depth, ds, a, rows)
-    print(f"\nwrote {C.RESULTS / f'exp12_extreme_M{a.M}.csv'}\n[exp12] DONE", flush=True)
+    print(f"\nwrote {C.RESULTS / f'exp12_extreme_{a.tag}.csv'}\n[exp12] DONE", flush=True)
 
 
 if __name__ == "__main__":

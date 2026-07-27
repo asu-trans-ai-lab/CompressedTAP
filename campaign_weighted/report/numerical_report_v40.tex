@@ -7,7 +7,7 @@
 \usepackage{caption}
 \captionsetup{font=small}
 
-\newcommand{\docver}{v4.0}
+\newcommand{\docver}{v4.1}
 \newif\ifshownotes \shownotestrue
 \newcommand{\conote}[1]{\ifshownotes{\color{red}\small\textsf{[Note to co-authors: #1]}}\fi}
 \newcommand{\Kbar}{\bar K}
@@ -256,6 +256,98 @@ outer budget), passing $10^{-2}$ at 40\,s and $5\times10^{-3}$ at 103\,s, with t
 set self-pruning ($1{,}480\to1{,}158$) as ODs equilibrate. Stale atoms, not atoms, were
 weak. Exchange atoms also \emph{converge cleanly} (inner iterations collapse to single
 digits; no boundary churn), unlike every signed-basis arm.
+
+\section{Catalogue: every representation tried, and why}\label{sec:catalogue}
+
+Each candidate below was motivated by a specific failure of its predecessor; nothing was
+tried at random. All accuracy numbers are the common gap \eqref{eq:G} on K10-d05 unless
+noted.
+
+\begin{table}[h]\centering\scriptsize
+\caption{The representation ladder. ``Capture'' $=\eta_{\text{minor}}$ at the $r{=}6$
+plateau point; ``floor'' = trajectory plateau of $G$.}
+\begin{tabular}{p{2.9cm}p{4.3cm}p{4.6cm}p{3.0cm}}
+\toprule
+representation & construction & rationale & outcome / verdict\\
+\midrule
+1. global SVD, unweighted &
+$U_r$ = top left sing.\ vectors of $B_2$ &
+Eckart--Young optimal subspace for the incidence structure; the submitted method &
+works only above $G{\approx}0.015$; retained as comparison arm\\[2pt]
+2. global SVD, flow-weighted &
+SVD of $SB_2$, $S{=}\mathrm{diag}(\sqrt{w_0}{+}\varepsilon)$ &
+high-flow minors should dominate the subspace &
+better solved gap in 27/34 pairs; NOT reconstruction-optimal (that is
+$\mathrm{span}(S^{-1}\tilde U_r)$); campaign default\\[2pt]
+3. offset-free ($w_0{=}0$) ablation &
+exact removal: $v\!\leftarrow\!v{-}B_2^\top w_0$, $d\!\leftarrow\!d{+}A_2w_0$ &
+is the anchor a convenience or a mechanism? &
+anchor is \textbf{load-bearing}: grid mean speedup $2.60{\times}\!\to\!1.07{\times}$,
+Sioux $6.2{\times}\!\to\!1.34{\times}$\\[2pt]
+4. rank ladder $r{=}6/10/20/50$ &
+same class, more modes &
+maybe the floor is just rank starvation &
+floor $0.0134/0.0135/0.0127$: \textbf{rank-insensitive}; rank is a cost dial
+($2r\lesssim$ links/path), not an accuracy dial\\[2pt]
+5. origin-block SVD (light/med) &
+$U=\mathrm{blkdiag}(U_1,\dots,U_{|O|})$, $r_o=\lceil\alpha\sqrt{N_o}\rceil$,
+$R{=}1081/2792$ &
+C3 showed cross-OD coupling: block by origin so corrections cannot disturb unrelated
+origins; SP trees/generation are origin-organised &
+capture $4.1/9.1\%$; dominates global on the one-step frontier at equal CPU, but
+\textbf{class-level floor $\sim$0.0113} at both budgets\\[2pt]
+6. destination-block SVD &
+(designed, deliberately not run) &
+useful only for destination-concentrated demand; origin ordering preferred for SP
+trees, per-origin pricing, parallelisation &
+deferred as a comparison arm\\[2pt]
+7. odx1: flow-ranked exchange atoms &
+one $a_q{=}(e_j{-}e_{j'})/\sqrt2$ per OD, two \emph{largest-flow} minors &
+$\mathbf1^\top a_q{=}0$: conservation automatic; substitution not signed
+reconstruction &
+capture only 5.06\% with $R{=}69{,}707$: \textbf{placement $>$ count}; flow rank
+$\ne$ where the gradient is\\[2pt]
+8. odx1g: cost-selected static atoms &
+cheapest-vs-costliest \emph{used} minor per OD at initial costs &
+steepest within-OD substitution direction &
+converges \textbf{cleanly} (no boundary churn, inner iters $\to$ single digits) to
+0.0117: exchange class has only a capture defect --- and static pairs go stale\\[2pt]
+9. odxfull: within-OD zero-sum basis &
+Helmert basis per OD, $k_q{-}1$ atoms, $R{=}731{,}612$ &
+the OD-locality \emph{upper bound}: what would full within-OD freedom buy? &
+capture \textbf{98.48\%} (major--minor exchange only $\sim$1.5\%): proves the floor is
+cross-OD coupling; too large to be compression\\[2pt]
+10. static hybrid: backbone + top-$B$ atoms &
+origin-light $+$ atoms on top-$B$ ODs by $G_q$ \eqref{eq:Gq},
+$B{\in}\{500,2000,5000\}{\times}1$, $2000{\times}2$; bounds \eqref{eq:bounds} &
+concentrate scarce atoms where disequilibrium lives; box bounds remove hinge repair &
+plateaus 0.0103--0.0112; only $\sim$1/3 of high-gap ODs even atom-eligible
+($\ge$2 used minors): \textbf{staleness dominates}\\[2pt]
+11. \textbf{dynamic repricing} &
+same as 10 but $w_0$, costs, $G_q$, pairs rebuilt every outer; $\lambda,\rho$ carry &
+equilibrium-error-guided column generation in the tangent space; the steepest pair
+\emph{changes} as costs move &
+\textbf{$G=0.00407$ and descending}; $t@10^{-2}{=}40$\,s, $t@5{\times}10^{-3}{=}103$\,s;
+active set self-prunes $1480\!\to\!1158$\\[2pt]
+12. grouped / box-bound (bundle) &
+nonnegative combination weights over grouped columns (earlier campaign, m3r1) &
+internalise the anchor: feasibility as a plain box, no signed crossing, no hinge &
+best objective of any operator on K10 (gap 0.0000) but $0.54{\times}$ in Python;
+never run in C++ --- open Paper-2-adjacent arm\\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\noindent\textbf{The through-line.} Rows 1--4 established that the failure is not rank,
+weighting, or the anchor's absence but the \emph{class} (global coupling). Rows 5--9
+localised it: origin granularity is too coarse at small budgets, OD granularity contains
+98.5\% of the missing gradient. Rows 7--8 fixed the \emph{selection} rule (cost, not
+flow), row 10 fixed the \emph{placement} rule ($G_q$-active ODs, coefficient bounds),
+and row 11 fixed the \emph{timing} rule (reprice as costs move) --- the only change that
+broke the floor. Row 12 marks the alternative route (change the feasibility geometry
+instead of the span), deliberately left to the Paper-2 line.
+\conote{Rows 3 and 12 carry numbers from the pre-lockstep campaign
+(\texttt{W0\_LOAD\_BEARING.md}, \texttt{highk\_fixes.csv}); engines stated there.}
 
 \section{Result 4: the break-even transition (Chicago Sketch ladder)}\label{sec:ladder}
 
