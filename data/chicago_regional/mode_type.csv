@@ -1,0 +1,2 @@
+mode_type_id,mode_type,name,vot,pce,occ,operating_cost,demand_file,dedicated_shortest_path
+1,sov,SOV,21.5,1,1.0,0.1729,demand.csv,1
