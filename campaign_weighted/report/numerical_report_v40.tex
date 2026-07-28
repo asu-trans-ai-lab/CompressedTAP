@@ -7,7 +7,7 @@
 \usepackage{caption}
 \captionsetup{font=small}
 
-\newcommand{\docver}{v4.1}
+\newcommand{\docver}{v4.2}
 \newif\ifshownotes \shownotestrue
 \newcommand{\conote}[1]{\ifshownotes{\color{red}\small\textsf{[Note to co-authors: #1]}}\fi}
 \newcommand{\Kbar}{\bar K}
@@ -36,15 +36,21 @@ reachable band; below $\Kbar\approx15$ compression does not pay
 
 \medskip
 \noindent\fbox{\parbox{\dimexpr\textwidth-2\fboxsep-2\fboxrule}{%
-\textbf{Headline, Chicago Regional (structural negative, explained).} The E0 pool has
-$\Kbar=7.48$, so the reduction ceiling \eqref{eq:ceiling} caps compression at
-$1-1/7.48=86.6\%$ --- exactly the measured saturation value ($84.0\to86.3\to86.6\to86.6\%$
-for $\tau=1.03,3,8,20$; at $\tau{=}20$ the split retains 270{,}716 majors against
-270{,}598 OD pairs, i.e.\ one path per OD, the hard floor). The compiled solver paid only
-above ${\sim}90\%$ reduction, hence Regional \emph{cannot} pay with this pool for any
-$(\tau,r)$: the certified C++ bound is $S<0.58\times$. The negative is a property of the
-pool's richness, not of the method or its tuning, and is predictable in advance from two
-integers ($n$ and $\ell$).}}
+\textbf{Headline, Chicago Regional (predicted, then demonstrated).} With its original E0
+pool ($\Kbar=7.48$) Regional \emph{cannot} pay: the ceiling \eqref{eq:ceiling} caps
+reduction at 86.6\% --- exactly the measured saturation --- below the ${\sim}90\%$ paying
+regime (certified C++ bound $S<0.58\times$). The ceiling law predicts a richer pool must
+cross break-even, and the exp13 ladder (\S\ref{sec:regionalladder}) confirms it on the
+real 39{,}018-link topology, all C++: from $\Kbar\approx16$ upward the compressed solver
+\emph{strictly dominates} --- less wall time AND better terminal gap AND better objective
+--- reaching
+\[
+\mathbf{7.9\times}\ \text{faster at strictly better accuracy}\quad
+(\Kbar=44.5,\ n=858{,}914:\ 173.7\,\mathrm{s}\ \text{vs}\ 1371.8\,\mathrm{s},\
+\text{objective } 2.6\%\ \text{better}).
+\]
+The old negative was a property of the pool's richness, predictable in advance from two
+integers ($n$, $\ell$) --- and so was the fix.}}
 
 \conote{Everything in this report traces to CSVs in \texttt{campaign\_weighted/results/}
 (commits \texttt{f6deb4e}, \texttt{4612cae}, \texttt{a25b5a4}, \texttt{a01413d},
@@ -379,6 +385,43 @@ stated wherever these numbers appear: the $\tau$ split leaves 25\% majors (75\%
 reduction, not the $\sim$98\% extreme configuration --- a tighter split is the obvious
 next lever and these $S$ are likely understatements); Python engine; outer-granularity
 timing; one seed; controlled demand subset.
+
+\section{Result 5: the Regional ladder --- strict domination in C++}\label{sec:regionalladder}
+
+The ceiling law's prediction test: the same recipe as \S\ref{sec:ladder} on the Regional
+topology (39{,}018 links; fixed top-20{,}000 ODs = 26.7\% of demand --- a
+\emph{controlled-richness instance}, not full-demand Regional), nested pools
+$\Kbar=7.96/15.67/29.68/44.54$, \textbf{all C++}, single thread, within-engine, HIST
+traces on the shared gap certificate (\texttt{exp13\_regional\_M20000\_cpp.csv}).
+
+\begin{table}[h]\centering\small
+\caption{Full vs compressed (incumbent representation, weighted, $r{=}6$), compiled
+solver. From X16 upward compression strictly dominates on all three columns at once.}
+\begin{tabular}{lrrrrrrr}
+\toprule
+pool & $\Kbar$ & $T_{\mathrm{full}}$ & $T_{\mathrm{comp}}$ & ratio &
+$G_{\mathrm{full}}$ & $G_{\mathrm{comp}}$ & $\Delta$obj (comp vs full)\\
+\midrule
+X8 ($\approx$ E0) & 7.96 & 255.8\,s & 198.5\,s & 1.29 & 5.92e-2 & 5.91e-2 & $+0.44\%$\\
+X16 & 15.67 & 382.7\,s & 100.3\,s & \textbf{3.82} & 8.61e-2 & \textbf{6.59e-2} & $\mathbf{-1.08\%}$\\
+X32 & 29.68 & 875.3\,s & 241.2\,s & \textbf{3.63} & 1.04e-1 & \textbf{7.42e-2} & $\mathbf{-1.90\%}$\\
+X64 & 44.54 & 1371.8\,s & \textbf{173.7\,s} & \textbf{7.90} & 1.09e-1 & \textbf{7.48e-2} & $\mathbf{-2.59\%}$\\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\noindent The bottom rung closes the loop: X8 ($\Kbar=7.96$) is a near-replica of the E0
+pool ($\Kbar=7.48$) where Regional originally failed, and it shows the near-tie the
+ceiling predicts. Framing discipline, stated wherever these numbers appear:
+(i) the pre-registered targets $G^\ast\in\{0.020,0.015\}$ were reached by \emph{neither}
+C++ mode at any depth (recorded DNS) --- the compiled full solver's inner stalls at
+$5.9\times10^{-2}$--$1.1\times10^{-1}$, worsening with $n$; (ii) matched-quality ratios
+(time to the full solver's own best-ever quality: $68/94/254/135\times$,
+\texttt{exp13\_matched\_quality.csv}) therefore reflect baseline weakness as much as
+compression strength --- the conservative headline is the strict-domination wall ratio;
+(iii) the compressed arm here is the \emph{incumbent} global-SVD representation --- the
+dynamic-atom hybrid exists only in Python, and its C++ port is the named follow-up;
+(iv) light demand (26.7\%) makes this a scaling instance, not full Regional assignment.
 
 \section{Requalified claims and retired claims}\label{sec:requal}
 
