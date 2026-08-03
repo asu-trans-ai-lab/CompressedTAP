@@ -39,7 +39,7 @@ import common as K
 import config as C
 
 SCRATCH = Path(os.environ.get("TMP", "/tmp")) / "reuse_cpp"
-SKETCH = C.DATA / "03_chicago_sketch"
+SKETCH = C.DATA / "chicago_sketch"
 POOLS = {"K10": "path_pool_K10.csv", "K15": "path_pool_K15.csv"}
 TAU = 4.54
 # files that MUST be identical across scenarios if the basis is genuinely reused

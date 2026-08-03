@@ -30,9 +30,9 @@ import common as K
 import config as C
 
 SCRATCH = Path(os.environ.get("TMP", "/tmp")) / "cpp_closure"
-SKETCH_DIR = C.DATA / "03_chicago_sketch"
+SKETCH_DIR = C.DATA / "chicago_sketch"
 POOLS = {"E2": "path_pool.csv", "K10": "path_pool_K10.csv", "K15": "path_pool_K15.csv"}
-REGIONAL_DIR = C.DATA / "04_chicago_regional"
+REGIONAL_DIR = C.DATA / "chicago_regional"
 REGIONAL_POOL = "path_pool_E0_baseline.csv"
 TAU_SKETCH, TAU_REGIONAL = 4.54, 1.03
 

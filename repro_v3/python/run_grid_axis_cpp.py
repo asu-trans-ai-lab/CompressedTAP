@@ -28,8 +28,8 @@ import numpy as np
 import pandas as pd
 
 HERE = Path(__file__).resolve().parent
-ROOT = HERE.parents[3]
-CERTPY = ROOT / "source" / "updated_TAPLite" / "python"
+ROOT = HERE.parents[1]
+CERTPY = ROOT / "vendor"
 CPPDIR = ROOT / "stable_release" / "10_implementation"
 KSP = CPPDIR / "ksp_gen.exe"
 SOLVER = CPPDIR / "compressed_solver_o3sse.exe"

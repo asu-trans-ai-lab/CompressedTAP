@@ -11,9 +11,9 @@ unweighted arm is retained so the comparison itself can be reported.
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
-CERTPY = ROOT / "source" / "updated_TAPLite" / "python"
-DATA = CERTPY.parent / "data"
-V2 = ROOT / "OR_paper_revision_V2" / "m4_rerun" / "data"
+CERTPY = ROOT / "vendor"
+DATA = ROOT / "data"
+V2 = ROOT / "data" / "submitted_v2"
 CPP = ROOT / "stable_release" / "10_implementation" / "compressed_solver_o3sse.exe"
 KSP = ROOT / "stable_release" / "10_implementation" / "ksp_gen.exe"
 
@@ -38,12 +38,12 @@ REPS_LARGE = 1                  # single run above that; variance is reported, n
 ROAD = {
     "sioux":     (V2 / "sioux",  "pool.csv", 600.0, "real network, 76 links, 91% reduction"),
     "sketch-V2": (V2 / "sketch", "pool.csv",   4.54, "submitted Chicago Sketch pool, Kbar 2.45"),
-    "sketch-E0": (DATA / "03_chicago_sketch", "path_pool_E0_baseline.csv", 4.54,
+    "sketch-E0": (DATA / "chicago_sketch", "path_pool_E0_baseline.csv", 4.54,
                   "enriched Sketch, Kbar 3.49 -- the sweet spot"),
-    "sketch-E2": (DATA / "03_chicago_sketch", "path_pool.csv", 4.54,
+    "sketch-E2": (DATA / "chicago_sketch", "path_pool.csv", 4.54,
                   "rich Sketch, Kbar 8.64"),
-    "sketch-K10": (DATA / "03_chicago_sketch", "path_pool_K10.csv", 4.54, "Kbar 11.09"),
-    "sketch-K15": (DATA / "03_chicago_sketch", "path_pool_K15.csv", 4.54, "Kbar 15.34"),
+    "sketch-K10": (DATA / "chicago_sketch", "path_pool_K10.csv", 4.54, "Kbar 11.09"),
+    "sketch-K15": (DATA / "chicago_sketch", "path_pool_K15.csv", 4.54, "Kbar 15.34"),
 }
 RICHNESS_AXIS = ["sketch-V2", "sketch-E0", "sketch-E2", "sketch-K10", "sketch-K15"]
 RANK_CASES = ["sioux", "sketch-V2", "sketch-E0"]

@@ -17,7 +17,7 @@ from pathlib import Path
 import numpy as np
 
 HERE = Path(__file__).resolve().parent
-CERT = HERE.parents[3] / "source" / "updated_TAPLite" / "python"
+CERT = HERE.parents[1] / "vendor"
 sys.path.insert(0, str(HERE))
 sys.path.insert(0, str(CERT))
 

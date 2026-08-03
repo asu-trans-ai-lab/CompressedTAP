@@ -28,7 +28,7 @@ from pathlib import Path
 import numpy as np
 
 HERE = Path(__file__).resolve().parent
-ROOT = HERE.parents[3]
+ROOT = HERE.parents[1]
 SOLVER = ROOT / "stable_release" / "10_implementation" / "compressed_solver_o3sse.exe"
 SCRATCH = Path(os.environ.get("TMP", "/tmp")) / "grid_axis"
 ENV = {**os.environ, "OMP_NUM_THREADS": "1", "MKL_NUM_THREADS": "1"}

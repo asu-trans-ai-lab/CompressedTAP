@@ -33,9 +33,9 @@ from pathlib import Path
 import numpy as np
 
 HERE = Path(__file__).resolve().parent
-ROOT = HERE.parents[3]
+ROOT = HERE.parents[1]
 sys.path.insert(0, str(HERE))
-sys.path.insert(0, str(ROOT / "source" / "updated_TAPLite" / "python"))
+sys.path.insert(0, str(ROOT / "vendor"))
 
 import v3_metrics as M                                    # noqa: E402
 import compressed_assignment as ca                        # noqa: E402
@@ -43,14 +43,14 @@ import v3_reference as REF                              # noqa: E402
 from run_table2_consistency import (LMOIndex, op_gp_full, op_fw_full,   # noqa: E402
                                     op_alm_full)
 
-DATA = ROOT / "source" / "updated_TAPLite" / "data"
+DATA = ROOT / "data"
 NETS = {
     # thresholds exactly as submitted in the v3 manuscript
-    "sketch": dict(dir=DATA / "03_chicago_sketch", pool="path_pool.csv", multi=True,
+    "sketch": dict(dir=DATA / "chicago_sketch", pool="path_pool.csv", multi=True,
                    taus=[0.0, 0.46, 1.06, 4.54], rank=50),
-    "regional": dict(dir=DATA / "04_chicago_regional", pool="path_pool.csv", multi=True,
+    "regional": dict(dir=DATA / "chicago_regional", pool="path_pool.csv", multi=True,
                      taus=[0.0, 0.23, 0.46, 1.03], rank=50),
-    "philadelphia": dict(dir=ROOT / "OR_paper_revision_V2" / "m4_rerun" / "data"
+    "philadelphia": dict(dir=ROOT / "data" / "submitted_v2"
                          / "philadelphia", pool="pool.csv", multi=True,
                          taus=[0.0, 0.67, 0.99, 5.33], rank=50),
     # sioux is not a manuscript Panel-A network; included only as a fast validation of the

@@ -25,16 +25,16 @@ from pathlib import Path
 import numpy as np
 
 HERE = Path(__file__).resolve().parent
-ROOT = HERE.parents[3]
-CERTPY = ROOT / "source" / "updated_TAPLite" / "python"
+ROOT = HERE.parents[1]
+CERTPY = ROOT / "vendor"
 sys.path.insert(0, str(HERE))
 sys.path.insert(0, str(CERTPY))
 
 import v3_metrics as M
 import compressed_assignment as ca
 
-SK_DATA = CERTPY.parent / "data" / "03_chicago_sketch"
-V2_DIR = ROOT / "OR_paper_revision_V2" / "m4_rerun" / "data" / "sketch"
+SK_DATA = ROOT / "data" / "chicago_sketch"
+V2_DIR = ROOT / "data" / "submitted_v2" / "sketch"
 POOLS = {
     "V2":  (V2_DIR, "pool.csv"),
     "E0":  (SK_DATA, "path_pool_E0_baseline.csv"),

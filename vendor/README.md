@@ -1,8 +1,15 @@
 # Vendored upstream sources
 
-Files here are **copies** of sources that live outside any git repository, kept so that
-corrections made during this campaign are not lost. They are not the build path — the code
-actually executed lives at the upstream location below — so if you change one, change both.
+Files here are **copies** of sources whose upstream lives outside any git repository, kept
+in sync so the campaign runs from a clean clone. Since 2026-08-02 this directory IS the
+import path: every committed driver inserts `vendor/` on `sys.path` (previously they pointed
+at the untracked upstream location). If you change a file here, change its upstream too.
+
+## `export_stage7.py`
+
+Upstream: `source/updated_TAPLite/python/export_stage7.py` (untracked directory); vendored
+byte-identical 2026-08-02. Exports a GMNS (dataset_dir, pool) problem to the C++ solver's
+binary blobs; only dependency is `compressed_assignment.py` in this directory.
 
 ## `compressed_assignment.py`
 

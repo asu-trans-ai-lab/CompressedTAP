@@ -26,13 +26,13 @@ import time
 from pathlib import Path
 
 HERE = Path(__file__).resolve().parent
-ROOT = HERE.parents[3]
-CERTPY = ROOT / "source" / "updated_TAPLite" / "python"
+ROOT = HERE.parents[1]
+CERTPY = ROOT / "vendor"
 sys.path.insert(0, str(HERE))
 from run_grid_w0free import make_w0free, solve as cpp_solve
 
 ENV = {**os.environ, "OMP_NUM_THREADS": "1", "MKL_NUM_THREADS": "1"}
-DS = CERTPY.parent / "data" / "04_chicago_regional"
+DS = ROOT / "data" / "chicago_regional"
 POOL = "path_pool_E0_baseline.csv"
 SCRATCH = Path(os.environ.get("TMP", "/tmp")) / "regional_rank_w0"
 

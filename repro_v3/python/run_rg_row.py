@@ -11,14 +11,14 @@ from pathlib import Path
 import numpy as np
 
 HERE = Path(__file__).resolve().parent
-ROOT = HERE.parents[3]
-sys.path.insert(0, str(HERE)); sys.path.insert(0, str(ROOT / "source/updated_TAPLite/python"))
+ROOT = HERE.parents[1]
+sys.path.insert(0, str(HERE)); sys.path.insert(0, str(ROOT / "vendor"))
 import v3_metrics as M
 import compressed_assignment as ca
 from run_table2_consistency import LMOIndex
 from run_anchor_reduced import build_anchor, solve_R
 
-P = ca.load_problem(str(ROOT / "OR_paper_revision_V2/m4_rerun/data/sketch"), "pool.csv",
+P = ca.load_problem(str(ROOT / "data/submitted_v2/sketch"), "pool.csv",
                     multi_path_only=True)
 major = ca.split_major_minor(P, tau=4.54)
 C = ca.build_compressed(P, major, 50)

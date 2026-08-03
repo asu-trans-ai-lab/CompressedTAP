@@ -32,7 +32,7 @@ from pathlib import Path
 import numpy as np
 
 HERE = Path(__file__).resolve().parent
-CERT = HERE.parents[3] / "source" / "updated_TAPLite" / "python"
+CERT = HERE.parents[1] / "vendor"
 sys.path.insert(0, str(HERE))
 sys.path.insert(0, str(CERT))
 
@@ -40,9 +40,9 @@ import v3_metrics as M                                    # noqa: E402
 import compressed_assignment as ca                        # noqa: E402
 import gp_compressed as GPC                                # noqa: E402
 
-DATA = HERE.parents[3] / "source" / "updated_TAPLite" / "data"
+DATA = HERE.parents[1] / "data"
 NETS = {
-    "sketch": dict(dir=DATA / "03_chicago_sketch", pool="path_pool.csv", multi=True,
+    "sketch": dict(dir=DATA / "chicago_sketch", pool="path_pool.csv", multi=True,
                    tau_q=0.90, rank=50),
     "sioux": dict(dir=DATA / "02_Sioux_Falls", pool="path_pool_SFK25.csv", multi=False,
                   tau_q=0.90, rank=50),

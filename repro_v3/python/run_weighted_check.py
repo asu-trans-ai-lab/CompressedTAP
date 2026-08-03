@@ -20,15 +20,15 @@ from pathlib import Path
 import numpy as np
 
 HERE = Path(__file__).resolve().parent
-ROOT = HERE.parents[3]
-sys.path.insert(0, str(HERE)); sys.path.insert(0, str(ROOT / "source/updated_TAPLite/python"))
+ROOT = HERE.parents[1]
+sys.path.insert(0, str(HERE)); sys.path.insert(0, str(ROOT / "vendor"))
 
 import v3_metrics as M
 import compressed_assignment as ca
 from run_kod_axis import POOLS
 
 CASES = [
-    ("sioux", ROOT / "OR_paper_revision_V2/m4_rerun/data/sioux", "pool.csv", 600.0),
+    ("sioux", ROOT / "data/submitted_v2/sioux", "pool.csv", 600.0),
     ("sketch-V2", POOLS["V2"][0], POOLS["V2"][1], 4.54),
     ("sketch-E0", POOLS["E0"][0], POOLS["E0"][1], 4.54),
 ]

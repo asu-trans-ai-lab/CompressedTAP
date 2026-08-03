@@ -33,8 +33,8 @@ import common as K
 import config as C
 
 SCRATCH = Path(os.environ.get("TMP", "/tmp")) / "extreme_case"
-SRCS = {"sketch": C.DATA / "03_chicago_sketch",
-        "regional": C.DATA / "04_chicago_regional"}
+SRCS = {"sketch": C.DATA / "chicago_sketch",
+        "regional": C.DATA / "chicago_regional"}
 DEPTHS = [8, 16, 32, 64]
 
 

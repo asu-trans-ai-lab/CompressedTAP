@@ -27,7 +27,7 @@ import common as K
 import config as C
 
 SCRATCH = Path(os.environ.get("TMP", "/tmp")) / "regional_tau"
-DS = C.DATA / "04_chicago_regional"
+DS = C.DATA / "chicago_regional"
 POOL = "path_pool_E0_baseline.csv"
 T_FULL = 1085.3          # exp05, same machine; deterministic objective 18,854,545.32
 O_FULL = 18854545.32

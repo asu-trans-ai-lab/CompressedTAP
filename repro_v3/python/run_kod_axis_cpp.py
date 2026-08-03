@@ -19,8 +19,8 @@ import time
 from pathlib import Path
 
 HERE = Path(__file__).resolve().parent
-ROOT = HERE.parents[3]
-CERTPY = ROOT / "source" / "updated_TAPLite" / "python"
+ROOT = HERE.parents[1]
+CERTPY = ROOT / "vendor"
 sys.path.insert(0, str(HERE))
 from run_kod_axis import POOLS, TAU
 

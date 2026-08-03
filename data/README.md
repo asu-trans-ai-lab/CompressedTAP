@@ -19,6 +19,11 @@ and `ksp_gen` builds its pools. Nothing to download.
 
 ## Regenerating excluded Sketch pools
 
+The generator, the C++ solver, and the exporters are committed under
+`stable_release/10_implementation/` (sources + `build.sh`, MinGW `g++ -O2 -static`;
+Windows binaries `ksp_gen.exe`, `compressed_solver.exe`, `compressed_solver_o3sse.exe`
+included). The Python exporter the drivers call is `vendor/export_stage7.py`.
+
 ```bash
 # K-shortest-path pools (deterministic penalty method, factor 1.4)
 stable_release/10_implementation/ksp_gen.exe data/chicago_sketch 10 1.4 path_pool_K10.csv
@@ -27,6 +32,17 @@ stable_release/10_implementation/ksp_gen.exe data/chicago_sketch 15 1.4 path_poo
 
 E0/E1/E2/GEN* pools came from earlier enrichment pipelines (see `repro_v3/`); the
 campaign's certified results identify which pool each number used.
+
+## Instances NOT in this repository
+
+- `chicago_sketch` E0/E2 pools (`path_pool_E0_baseline.csv`, `path_pool.csv`) — enrichment
+  provenance data, not regenerable by `ksp_gen`; drivers that need them will report the
+  missing file.
+- `chicago_regional` pools (incl. `path_pool_E0_baseline.csv`) — excluded by design.
+- `02_Sioux_Falls` with `path_pool_SFK25.csv` (referenced by `run_table2_consistency.py`
+  and `run_table4A_thresholds.py`) — only the submitted-v2 Sioux instance
+  (`submitted_v2/sioux/`) is committed.
+- `submitted_v2/philadelphia` — not committed.
 
 ## Regenerating the exp12/exp13 nested extreme-case pools
 

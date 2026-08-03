@@ -24,8 +24,8 @@ from pathlib import Path
 import numpy as np
 
 HERE = Path(__file__).resolve().parent
-ROOT = HERE.parents[3]
-CERTPY = ROOT / "source" / "updated_TAPLite" / "python"
+ROOT = HERE.parents[1]
+CERTPY = ROOT / "vendor"
 sys.path.insert(0, str(HERE)); sys.path.insert(0, str(CERTPY))
 
 import v3_metrics as M

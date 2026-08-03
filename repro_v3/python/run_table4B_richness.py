@@ -33,8 +33,8 @@ from scipy.sparse import csr_matrix
 from scipy.sparse.csgraph import dijkstra
 
 HERE = Path(__file__).resolve().parent
-ROOT = HERE.parents[3]
-CERTPY = ROOT / "source" / "updated_TAPLite" / "python"
+ROOT = HERE.parents[1]
+CERTPY = ROOT / "vendor"
 sys.path.insert(0, str(HERE))
 sys.path.insert(0, str(CERTPY))
 
@@ -59,7 +59,7 @@ def make_cert(P):
 
     return cert
 
-SKETCH = CERTPY.parent / "data" / "03_chicago_sketch"
+SKETCH = ROOT / "data" / "chicago_sketch"
 KS = [8, 16, 32, 64]
 
 

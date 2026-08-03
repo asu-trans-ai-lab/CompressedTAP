@@ -32,8 +32,8 @@ from pathlib import Path
 import numpy as np
 
 HERE = Path(__file__).resolve().parent
-ROOT = HERE.parents[3]
-CERTPY = ROOT / "source" / "updated_TAPLite" / "python"
+ROOT = HERE.parents[1]
+CERTPY = ROOT / "vendor"
 sys.path.insert(0, str(HERE))
 sys.path.insert(0, str(CERTPY))
 
@@ -43,7 +43,7 @@ from run_table2_consistency import op_gp_full, op_fw_full, LMOIndex
 from gp_compressed import solve_gp_signed
 from run_anchor_reduced import build_anchor, solve_R
 
-SKETCH = ROOT / "OR_paper_revision_V2" / "m4_rerun" / "data" / "sketch"
+SKETCH = ROOT / "data" / "submitted_v2" / "sketch"
 
 
 def main():

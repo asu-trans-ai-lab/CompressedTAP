@@ -72,9 +72,9 @@ SCRATCH = Path(os.environ.get("TMP", "/tmp")) / "lockstep"
 
 CASES = {  # name -> (dsdir, pool file, tau)
     "V2":  (C.V2 / "sketch", "pool.csv", 4.54),
-    "E0":  (C.DATA / "03_chicago_sketch", "path_pool_E0_baseline.csv", 4.54),
-    "K10": (C.DATA / "03_chicago_sketch", "path_pool_K10.csv", 4.54),
-    "K15": (C.DATA / "03_chicago_sketch", "path_pool_K15.csv", 4.54),
+    "E0":  (C.DATA / "chicago_sketch", "path_pool_E0_baseline.csv", 4.54),
+    "K10": (C.DATA / "chicago_sketch", "path_pool_K10.csv", 4.54),
+    "K15": (C.DATA / "chicago_sketch", "path_pool_K15.csv", 4.54),
 }
 
 
