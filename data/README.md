@@ -26,8 +26,9 @@ included). The Python exporter the drivers call is `vendor/export_stage7.py`.
 
 ```bash
 # K-shortest-path pools (deterministic penalty method, factor 1.4)
-stable_release/10_implementation/ksp_gen.exe data/chicago_sketch 10 1.4 path_pool_K10.csv
-stable_release/10_implementation/ksp_gen.exe data/chicago_sketch 15 1.4 path_pool_K15.csv
+# NB: the 4th argument is resolved against the CURRENT directory, so give the full path
+stable_release/10_implementation/ksp_gen.exe data/chicago_sketch 10 1.4 data/chicago_sketch/path_pool_K10.csv
+stable_release/10_implementation/ksp_gen.exe data/chicago_sketch 15 1.4 data/chicago_sketch/path_pool_K15.csv
 ```
 
 E0/E1/E2/GEN* pools came from earlier enrichment pipelines (see `repro_v3/`); the
